@@ -61,6 +61,7 @@ def log_response(response):
 def index():
     return render_template('index.html')
 
+
 @app.route('/audio/<filename>')
 def serve_audio(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
