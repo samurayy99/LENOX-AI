@@ -1,0 +1,39 @@
+{
+  "name": "crypto-stock",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@cloudflare/next-on-pages": "^1.11.0",
+    "@emotion/react": "^11.11.3",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.7",
+    "@mui/material": "^5.15.7",
+    "@nextui-org/react": "^2.2.9",
+    "@vercel/analytics": "^1.2.2",
+    "firebase": "^10.8.0",
+    "js-cookie": "^3.0.5",
+    "lodash.debounce": "^4.0.8",
+    "mdi-material-ui": "^7.8.0",
+    "next": "14.1.0",
+    "raw-body": "^2.5.2",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.22.0",
+    "recharts": "^2.12.0",
+    "stripe": "^14.19.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.3"
+  }
+}

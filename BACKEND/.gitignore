@@ -1,0 +1,17 @@
+__pycache__
+.cursorignore
+venv-lenox
+venv-lenox27
+app.log
+app.log.1
+data/
+static/images/
+documents/
+tmp/
+lenox.db
+requirements.txt
+Dockerfile
+docker-compose.yml
+.env
+.env
+.env
