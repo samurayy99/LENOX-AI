@@ -29,7 +29,7 @@ const Navbar = () => {
     },
     {
       name: "Lenox AI",
-      path: "/lenox-ai",
+      path: "http://localhost:5000",
     },
   ];
 
