@@ -10,16 +10,41 @@ from langchain.schema.runnable import RunnablePassthrough
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain.agents.format_scratchpad import format_to_openai_functions
 from lenox_memory import SQLChatMessageHistory
-from prompts import PromptEngine, PromptEngineConfig
+from prompts import PromptEngine
 import requests
 import json
+import logging
 from web_search import WebSearchManager
+from rich.console import Console
+
+console = Console()
+
+def format_response(response: dict) -> dict:
+    """
+    Format the response for better readability.
+
+    Parameters:
+    - response (dict): The original response dictionary.
+
+    Returns:
+    - dict: The formatted response dictionary.
+    """
+    if response["type"] == "text":
+        formatted_content = response['content']
+    elif response["type"] == "visualization":
+        formatted_content = response['content']  # Do not double-format visualization content
+    elif response["type"] == "document_response":
+        formatted_content = response['response']  # Already a structured response, no need for JSON formatting
+    else:
+        formatted_content = f"**Unknown response type:** {response['type']}"
+
+    return {"type": response["type"], "content": formatted_content}
 
 
 class Lenox:
     def __init__(self, tools, document_handler, prompt_engine=None, connection_string="sqlite:///lenox.db", openai_api_key=None):
         self.document_handler = document_handler
-        self.prompt_engine = prompt_engine if prompt_engine else PromptEngine(config=PromptEngineConfig(), tools=tools)
+        self.prompt_engine = PromptEngine(tools, model='gpt-3.5-turbo', max_tokens=4096)
         self.memory = SQLChatMessageHistory(session_id="my_session", connection_string=connection_string)
         self.openai_api_key = openai_api_key  # Save the API key
         self.db_path = 'lenox.db'
@@ -55,44 +80,70 @@ class Lenox:
             | OpenAIFunctionsAgentOutputParser()
         )
 
-    
+
+
+
     def convchain(self, query: str, session_id: str = "my_session") -> dict:
         """Process a user query."""
         if not query:
-            return {"type": "text", "content": "Please enter a query."}
+            return format_response({"type": "text", "content": "Please enter a query."})
 
         self.memory.session_id = session_id
         new_message = HumanMessage(content=query)
         self.memory.add_message(new_message)
         chat_history = self.memory.messages()
 
-        # Use the intent detection from WebSearchManager
-        intent = self.web_search_manager.detect_intent(query)
+        # Use the intent detection from PromptEngine
+        intent = self.prompt_engine.detect_intent(query)
 
-        # Handle intent using the WebSearchManager
-        response = self.web_search_manager.handle_intent(intent, query)
+        # Handle document-related queries
+        if intent == "document_query":
+            response = self.handle_document_query(query)
+        else:
+            # Handle intent using the WebSearchManager
+            response = self.web_search_manager.run_search(query) if intent == "information_query" else {"type": "text", "content": "Intent not handled."}
 
-        # If response type is text, add to memory
-        if response["type"] == "text":
-            self.memory.add_message(AIMessage(content=response["content"]))
-        elif response["type"] == "visualization":
-            # If visualization, handle visualization logic
-            return self.handle_visualization_query(query, session_id=session_id)
+            # If response type is text, add to memory
+            if response["type"] == "text":
+                self.memory.add_message(AIMessage(content=response["content"]))
+            elif response["type"] == "visualization":
+                # If visualization, handle visualization logic
+                response = self.handle_visualization_query(query, session_id=session_id)
 
-        # If intent is unknown or response type is not handled, use general conversational handling
-        if intent == "unknown" or response["type"] not in ["text", "visualization"]:
-            result = self.qa.invoke({"input": query, "chat_history": chat_history})
-            output = result.get('output', 'Error processing the request.')
+            # If intent is unknown or response type is not handled, use general conversational handling
+            if intent == "unknown" or response["type"] not in ["text", "visualization", "document_response"]:
+                result = self.qa.invoke({"input": query, "chat_history": chat_history})
+                output = result.get('output', 'Error processing the request.')
 
-            # Ensure output is a string
-            if not isinstance(output, str):
-                output = str(output)
+                # Ensure output is a string
+                if not isinstance(output, str):
+                    output = str(output)
 
-            self.memory.add_message(AIMessage(content=output))
-            return {"type": "text", "content": output}
+                self.memory.add_message(AIMessage(content=output))
+                response = {"type": "text", "content": output}
 
-        return response
+        return format_response(response)
+    
+    
 
+    def handle_document_query(self, query: str) -> dict:
+        """Query the document index."""
+        try:
+            results = self.document_handler.query(query)
+            
+            # Convert Document objects to JSON serializable format
+            json_results = [
+                {
+                    'page_content': doc.page_content,
+                    'metadata': doc.metadata
+                } for doc in results
+            ]
+            
+            # Return the JSON results as a dictionary
+            return {"type": "document_response", "response": json_results}
+        except Exception as e:
+            logging.error(f"Error querying document index: {e}")
+            return {"type": "error", "content": f"Error querying document index: {e}"}
 
 
 
@@ -138,10 +189,7 @@ class Lenox:
         visualization_config = VisualizationConfig(data=visualization_data, visualization_type=vis_type)
         visualization_json = create_visualization(visualization_config)
         return {"type": "visualization", "content": json.loads(visualization_json)}
-
-    def handle_document_query(self, query: str) -> str:
-        """Query the document index."""
-        return self.document_handler.query(query)
+    
 
     def synthesize_text(self, model, input_text, voice, response_format='mp3', speed=1):
         headers = {
@@ -211,3 +259,6 @@ class Lenox:
         # Here you can add logic to process the feedback in real-time
         print(f"Processing feedback '{feedback}' for session '{session_id}'")
         return "Feedback processed successfully"
+
+
+

@@ -1,139 +1,138 @@
 import logging
-from typing import Dict, List, Any
+from datetime import datetime
+from collections import deque
 from enum import Enum
-import re
+from tool_imports import import_tools
 
-# Set up logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+# Initialize logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class IntentType(Enum):
+    """Enumeration for identifying the user's intent more effectively."""
     GREETING = "greeting"
-    SEARCH = "search"
-    VISUALIZATION = "visualization"
-    SMALLTALK = "smalltalk"
     EMOTIONAL_SUPPORT = "emotional_support"
-    GRATITUDE = "gratitude"
-    AFFIRMATION = "affirmation"
-    CURIOSITY = "curiosity"
-    FEEDBACK = "feedback"
-    GENERAL = "general"
-    UNKNOWN = "unknown"
+    INFORMATION_QUERY = "information_query"
+    SMALLTALK = "smalltalk"
+    DOCUMENT_QUERY = "document_query"  # Added document query intent
 
-class EmotionLevel(Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    ANXIETY = "anxiety"
-    EXCITEMENT = "excitement"
-    FRUSTRATION = "frustration"
-    CALM = "calm"
-
-class PromptEngineConfig:
-    def __init__(self, context_length: int = 10, max_tokens: int = 4096):
-        self.context_length = context_length
-        self.max_tokens = max_tokens
+class EmotionalState(Enum):
+    """Enumeration to handle different levels of emotional responses."""
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    SUPPORTIVE = "supportive"
 
 class PromptEngine:
-    def __init__(self, config: PromptEngineConfig, tools: List[Any] = []):
-        self.config = config
-        self.tools = {f"tool_{i}": tool for i, tool in enumerate(tools)}
+    def __init__(self, tools=None, model='gpt-3.5-turbo-0125', max_tokens=4096):
+        self.model = model
+        self.max_tokens = max_tokens
+        self.tools = tools if tools else import_tools()
+        self.history = deque()  # Initialize history as a deque to manage past inputs efficiently
 
-    def preprocess_query(self, user_query: str) -> str:
-        query = user_query.strip().lower()
-        query = re.sub(r'\s+', ' ', query)
-        query = re.sub(r'[^\w\s]', '', query)
-        stopwords = {'the', 'is', 'in', 'and', 'to', 'of'}
-        query_words = query.split()
-        filtered_words = [word for word in query_words if word not in stopwords]
-        return ' '.join(filtered_words)
-
-    def classify_intent(self, user_query: str) -> IntentType:
-        user_query = user_query.lower()
-        search_keywords = ["search", "find", "lookup", "current", "latest", "information"]
-        if any(keyword in user_query for keyword in search_keywords):
-            return IntentType.SEARCH
-        if any(greeting in user_query for greeting in ["hi", "hello", "hey"]):
+    def classify_intent(self, user_input: str) -> IntentType:
+        """
+        Simple intent classification to augment ChatGPT-4's response handling.
+        """
+        lower_input = user_input.lower()
+        if any(greeting in lower_input for greeting in ["hello", "hi", "greetings", "hey"]):
             return IntentType.GREETING
-        if any(visual in user_query for visual in ["visualize", "graph", "chart", "plot"]):
-            return IntentType.VISUALIZATION
-        if any(smalltalk in user_query for smalltalk in ["how are you", "what's up"]):
+        elif "how are you" in lower_input or "what's up" in lower_input:
             return IntentType.SMALLTALK
-        if any(emotion in user_query for emotion in ["help", "support", "feel"]):
+        elif "help" in lower_input or "sad" in lower_input:
             return IntentType.EMOTIONAL_SUPPORT
-        if any(gratitude in user_query for gratitude in ["thank you", "thanks"]):
-            return IntentType.GRATITUDE
-        if any(affirmation in user_query for affirmation in ["great", "good job", "well done"]):
-            return IntentType.AFFIRMATION
-        if any(curiosity in user_query for curiosity in ["curious", "wonder"]):
-            return IntentType.CURIOSITY
-        if any(feedback in user_query for feedback in ["feedback", "comment"]):
-            return IntentType.FEEDBACK
-        return IntentType.UNKNOWN
+        elif "document" in lower_input or "file" in lower_input or "summarize" in lower_input:
+            return IntentType.DOCUMENT_QUERY  # Added document query classification
+        return IntentType.INFORMATION_QUERY
 
-    def generate_emotional_response(self, emotion_support: EmotionLevel) -> str:
+    def detect_intent(self, user_input: str) -> str:
+        """
+        Detect intent from user input.
+        """
+        intent = self.classify_intent(user_input)
+        return intent.value
+
+    def generate_emotional_response(self, state: EmotionalState) -> str:
+        """
+        Generates responses that are emotionally aware, enhancing the AI's empathy.
+        """
         responses = {
-            EmotionLevel.ANXIETY: "It's okay, take a deep breath. How can I assist you?",
-            EmotionLevel.EXCITEMENT: "That's awesome! What's got you excited?",
-            EmotionLevel.FRUSTRATION: "I'm here to help. What's bothering you?",
-            EmotionLevel.CALM: "I'm glad to hear you're feeling calm. How can I assist you today?"
+            EmotionalState.POSITIVE: "That sounds great! How can I assist you further?",
+            EmotionalState.NEUTRAL: "I understand. Please go on.",
+            EmotionalState.SUPPORTIVE: "I'm here for you. Tell me more about how you're feeling."
         }
-        return responses.get(emotion_support, "How can I assist you today?")
+        return responses[state]
 
-    def generate_dynamic_prompt(self, user_query: str, context_messages: List[str]) -> str:
-        context = " ".join(context_messages[-self.config.context_length:])
-        return f"{context} {user_query}"
+    def create_prompt(self, user_input: str) -> str:
+        """
+        Generates a personalized prompt based on the user's input and emotional state.
+        """
+        intent = self.classify_intent(user_input)
+        emotional_response = self.generate_emotional_response(
+            EmotionalState.SUPPORTIVE if intent == IntentType.EMOTIONAL_SUPPORT else EmotionalState.NEUTRAL
+        )
 
-    def handle_query(self, user_query: str) -> Dict[str, Any]:
-        intent = self.classify_intent(user_query)
-        logger.debug(f"Classified intent: {intent}")
-        if intent == IntentType.SEARCH:
-            return {"response": "Search functionality is not implemented."}
-        elif intent == IntentType.VISUALIZATION:
-            return self.visualization_response(user_query)
-        elif intent == IntentType.EMOTIONAL_SUPPORT:
-            return self.emotional_support_response(user_query)
-        elif intent == IntentType.GREETING:
-            return {"response": "Hello! How can I assist you today?"}
+        # Building a context-aware prompt
+        context = " ".join(self.history)
+        if intent == IntentType.DOCUMENT_QUERY:
+            prompt = f"{datetime.now():%Y-%m-%d %H:%M:%S} - Context: {context}\n{emotional_response}\nPlease summarize or provide information from the specified document.\nQuery: {user_input}"
+        else:
+            prompt = f"{datetime.now():%Y-%m-%d %H:%M:%S} - Context: {context}\n{emotional_response}\nWhat else can I help you with today?"
+
+        return prompt
+
+    def handle_input(self, user_input: str) -> str:
+        """
+        Handles the user input, updating history and generating a suitable prompt.
+        """
+        prompt = self.create_prompt(user_input)
+        self.history.append(user_input)
+        logging.info(f"Generated Prompt: {prompt}")
+        return prompt
+
+    def process_query(self, query: str, session_id: str) -> dict:
+        """
+        Process the user query by identifying its intent and using the appropriate tool.
+        """
+        intent = self.classify_intent(query)
+        if intent == IntentType.GREETING:
+            return self.handle_greeting()
         elif intent == IntentType.SMALLTALK:
-            return {"response": "I'm here to help. What do you need assistance with?"}
-        elif intent == IntentType.GRATITUDE:
-            return {"response": "You're welcome!"}
-        elif intent == IntentType.AFFIRMATION:
-            return {"response": "Thank you! I appreciate it."}
-        elif intent == IntentType.CURIOSITY:
-            return {"response": "That's an interesting question. What specifically would you like to know more about?"}
-        elif intent == IntentType.FEEDBACK:
-            return {"response": "I appreciate your feedback. It helps me improve."}
-        return {"response": "Sorry, I don't understand your query."}
+            return self.handle_smalltalk()
+        elif intent == IntentType.DOCUMENT_QUERY:
+            return self.handle_document_query(query)
+        elif intent == IntentType.EMOTIONAL_SUPPORT:
+            return self.handle_emotional_support()
+        else:
+            return self.handle_information_query(query)
 
-    def visualization_response(self, user_query: str) -> Dict[str, Any]:
-        # Placeholder for visualization logic
-        return {"response": "Visualization is not implemented yet."}
+    def handle_greeting(self) -> dict:
+        return {"type": "text", "content": "Hello! How can I assist you today?"}
 
-    def emotional_support_response(self, user_query: str) -> Dict[str, Any]:
-        emotion_level = self.detect_emotion_level(user_query)
-        emotional_response = self.generate_emotional_response(emotion_level)
-        return {"response": emotional_response}
+    def handle_smalltalk(self) -> dict:
+        return {"type": "text", "content": "I'm here to help you with any information you need."}
 
-    def detect_emotion_level(self, user_query: str) -> EmotionLevel:
-        if "anxious" in user_query or "nervous" in user_query:
-            return EmotionLevel.ANXIETY
-        if "excited" in user_query or "thrilled" in user_query:
-            return EmotionLevel.EXCITEMENT
-        if "frustrated" in user_query or "angry" in user_query:
-            return EmotionLevel.FRUSTRATION
-        if "calm" in user_query or "relaxed" in user_query:
-            return EmotionLevel.CALM
-        return EmotionLevel.LOW
+    def handle_document_query(self, query: str) -> dict:
+        """
+        Handle document-related queries.
+        """
+        # Example implementation for document handling
+        # Here you can integrate with your document handling logic
+        return {"type": "text", "content": "Document handling is not implemented yet."}
 
-    def fetch_response_from_model(self, prompt: str) -> str:
-        # Placeholder for model fetching logic
-        return "This is a mock response."
+    def handle_emotional_support(self) -> dict:
+        return {"type": "text", "content": "I'm here for you. Tell me more about how you're feeling."}
 
-    def add_interaction(self, input: str, response: str):
-        # Placeholder for interaction logging logic
-        logger.debug(f"Interaction logged: {input} -> {response}")
+    def handle_information_query(self, query: str) -> dict:
+        """
+        Handle general information queries using the appropriate tool.
+        """
+        response = None
+        for tool in self.tools:
+            tool_name = tool.__name__.lower()
+            if tool_name in query:
+                response = tool(query)
+                break
 
-    def update_tools(self, new_tools: Dict[str, Any]):
-        self.tools.update(new_tools)
+        if response is None:
+            response = "Sorry, I couldn't find a suitable tool to handle your query."
+
+        return {"type": "text", "content": response}

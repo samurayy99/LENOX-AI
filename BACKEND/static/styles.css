@@ -3,7 +3,7 @@ body,
 html {
   height: 100%;
   margin: 0;
-  font-family: 'Courier New', monospace;
+  font-family: 'Roboto', sans-serif;
   background-color: #e0e5ec;
   color: #000;
   overflow-x: hidden;
@@ -18,7 +18,8 @@ html {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  max-width: 100%;
+  max-width: 90%;
+  margin: auto;
   overflow: hidden;
   position: relative;
 }
@@ -34,6 +35,34 @@ html {
   flex-grow: 1;
 }
 
+.chat-message {
+  padding: 10px 20px;
+  border-radius: 20px;
+  max-width: 90%;
+  margin: 5px;
+  word-wrap: break-word;
+  align-self: flex-start;
+}
+
+.user-message {
+  background-color: #b0c4de;
+  color: #000;
+}
+
+.ai-message {
+  background-color: #f0f5fc;
+  color: #000;
+  align-self: flex-start;
+}
+
+.chat-message ul {
+  padding-left: 20px;
+}
+
+.chat-message li {
+  margin-bottom: 5px;
+}
+
 /* Chat Input Container */
 .chat-input-container {
   display: flex;
@@ -43,6 +72,12 @@ html {
   border-top: 2px solid #b0c4de;
   flex-direction: column;
   gap: 5px;
+}
+
+@media (max-width: 600px) {
+  .chat-input-container {
+    flex-direction: row;
+  }
 }
 
 /* Chat Input */
@@ -64,7 +99,7 @@ button {
   background-color: #add8e6;
   border: 1px solid #b0c4de;
   padding: 5px 10px;
-  margin-top: 5px;
+  margin: 5px 0;
   cursor: pointer;
   border-radius: 5px;
 }
@@ -198,7 +233,7 @@ button:hover {
 .ai-message {
   padding: 10px 20px;
   border-radius: 20px;
-  max-width: 80%;
+  max-width: 90%;
   margin: 5px;
   word-wrap: break-word;
   align-self: flex-start;
@@ -282,7 +317,6 @@ button:hover {
   font-weight: 700;
   font-size: 1.25em;
 }
-
 
 /* Feedback Buttons */
 .feedback-buttons {

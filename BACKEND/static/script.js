@@ -89,12 +89,54 @@ async function submitQuery() {
     showLoadingIndicator(false);
 }
 
+document.getElementById('uploadForm').addEventListener('submit', function (event) {
+    event.preventDefault(); // Prevent the default form submission
+
+    const fileInput = document.getElementById('fileUpload');
+    const formData = new FormData();
+
+    for (const file of fileInput.files) {
+        formData.append('file', file);
+    }
+
+    fetch('/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            console.error('Error uploading file:', data.error);
+            appendMessage(`Error uploading file: ${data.error}`, 'error-message');
+        } else {
+            console.log('File uploaded successfully:', data.message);
+            appendMessage(`File uploaded successfully: ${data.message}`, 'bot-message');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        appendMessage('An error occurred while uploading the file.', 'error-message');
+    });
+});
+
 function appendMessage(message, className, shouldIncludeAudio = false) {
     const chatMessages = document.getElementById('chat-messages');
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('chat-message', className);
 
+    // Convert URLs to links
     message = convertUrlsToLinks(message);
+
+    // Convert newlines to <br> tags
+    message = message.replace(/\n/g, '<br>');
+
+    // Convert markdown-style lists to HTML lists
+    message = message.replace(/(\*\*Response:\*\*)\n/g, '$1<br><ul>');
+    message = message.replace(/- (.+)/g, '<li>$1</li>');
+    message = message.replace(/<\/li>\n/g, '</li>');
+    message = message.replace(/<\/li><br>/g, '</li>');
+    message = message.replace(/<\/ul><br>/g, '</ul>');
+    message = message.replace(/<\/ul>/g, '</ul><br>');
 
     messageDiv.innerHTML = message;
 
@@ -164,6 +206,7 @@ function handleVisualResponse(data) {
     const visualizationContainer = appendVisualizationPlaceholder();
     if (data.content && visualizationContainer) {
         try {
+            console.log('Visualization data:', data.content);
             Plotly.newPlot(visualizationContainer, data.content.data, data.content.layout);
         } catch (e) {
             console.error('Error rendering visualization:', e);
@@ -182,32 +225,53 @@ function appendVisualizationPlaceholder() {
     return visualizationPlaceholder;
 }
 
+
+
 function processResponseData(data) {
     console.log("Received data from server:", data);
-    switch (data.type) {
-        case 'visualization':
-            handleVisualResponse(data);
-            break;
-        case 'text':
-            appendMessage(data.content, 'bot-message', true);
-            break;
-        case 'ai':
-            appendMessage(data.content, 'bot-message');
-            break;
-        case 'error':
-            console.error('Error response received:', data.content);
-            appendMessage(data.content, 'error-message');
-            break;
-        default:
-            console.error('Unexpected response type:', data.type);
-            appendMessage('Received unexpected type of data from the server.', 'error-message');
-            break;
+    try {
+        switch (data.type) {
+            case 'visualization':
+                handleVisualResponse(data);
+                break;
+            case 'text':
+                appendMessage(convertUrlsToLinks(data.content), 'bot-message', true);
+                break;
+            case 'document_response':
+                if (Array.isArray(data.content)) {
+                    data.content.forEach(doc => {
+                        appendMessage(`**Filename:** ${doc.metadata.filename}<br>**Content:** ${doc.page_content}`, 'bot-message');
+                    });
+                } else {
+                    throw new Error('Invalid document_response structure.');
+                }
+                break;
+            case 'error':
+                console.error('Error response received:', data.content);
+                appendMessage(data.content, 'error-message');
+                break;
+            default:
+                console.error('Unexpected response type:', data.type);
+                appendMessage('Received unexpected type of data from the server.', 'error-message');
+                break;
+        }
+    } catch (error) {
+        console.error('Error processing response:', error);
+        appendMessage(`Error processing response: ${error.message}`, 'error-message');
     }
 }
 
+
+
 function convertUrlsToLinks(text) {
     const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
-    return text.replace(urlRegex, url => `<a href="${url}" target="_blank">${url}</a>`);
+    return text.replace(urlRegex, url => {
+        // Check if the URL is already wrapped in an <a> tag
+        if (url.startsWith('<a href="')) {
+            return url;
+        }
+        return `<a href="${url}" target="_blank">${url}</a>`;
+    });
 }
 
 function scrollToLatestMessage() {

@@ -1,62 +1,106 @@
 import os
-from langchain_community.utilities import SerpAPIWrapper
-from langchain_community.tools import DuckDuckGoSearchResults
-from youtube_tools import search_youtube
+import logging
+from datetime import datetime
+from langchain_community.retrievers import TavilySearchAPIRetriever
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_openai import ChatOpenAI  # Updated import
+from langchain.agents import initialize_agent, AgentType
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import DocumentCompressorPipeline, EmbeddingsFilter
+from langchain_openai import OpenAIEmbeddings  # Updated import
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Ensure the API key is loaded from environment variables
+tavily_api_key = os.getenv("TAVILY_API_KEY")
+if not tavily_api_key:
+    raise ValueError("TAVILY_API_KEY environment variable is not set.")
+os.environ["TAVILY_API_KEY"] = tavily_api_key
+
+RESPONSE_TEMPLATE = """\
+You are an expert researcher and writer, tasked with answering any question.
+
+Generate a comprehensive and informative, yet concise answer of 250 words or less for the \
+given question based solely on the provided search results (URL and content). You must \
+only use information from the provided search results. Use an unbiased and \
+journalistic tone. Combine search results together into a coherent answer. Do not \
+repeat text. Cite search results using [${{number}}] notation. Only cite the most \
+relevant results that answer the question accurately. Place these citations at the end \
+of the sentence or paragraph that reference them - do not put them all at the end. If \
+different results refer to different entities within the same name, write separate \
+answers for each entity. If you want to cite multiple results for the same sentence, \
+format it as `[${{number1}}] [${{number2}}]`. However, you should NEVER do this with the \
+same number - if you want to cite `number1` multiple times for a sentence, only do \
+`[${{number1}}]` not `[${{number1}}] [${{number1}}]`
+
+You should use bullet points in your answer for readability. Put citations where they apply \
+rather than putting them all at the end.
+
+If there is nothing in the context relevant to the question at hand, just say "Hmm, \
+I'm not sure." Don't try to make up an answer.
+
+Anything between the following `context` html blocks is retrieved from a knowledge \
+bank, not part of the conversation with the user.
+
+<context>
+    {context}
+<context/>
+
+REMEMBER: If there is no relevant information within the context, just say "Hmm, I'm \
+not sure." Don't try to make up an answer. Anything between the preceding 'context' \
+html blocks is retrieved from a knowledge bank, not part of the conversation with the \
+user. The current date is {current_date}.
+"""
+
+def get_retriever():
+    embeddings = OpenAIEmbeddings()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=20)
+    relevance_filter = EmbeddingsFilter(embeddings=embeddings, similarity_threshold=0.8)
+    pipeline_compressor = DocumentCompressorPipeline(
+        transformers=[splitter, relevance_filter]
+    )
+    base_tavily_retriever = TavilySearchAPIRetriever()
+    tavily_retriever = ContextualCompressionRetriever(
+        base_compressor=pipeline_compressor, base_retriever=base_tavily_retriever
+    )
+    return tavily_retriever
+
 
 class WebSearchManager:
     def __init__(self):
-        serpapi_key = os.getenv('SERPAPI_API_KEY')
-        if not serpapi_key:
-            raise ValueError("SERPAPI_API_KEY not found in environment variables.")
+        # Set up the agent
+        self.llm = ChatOpenAI(model="gpt-4", temperature=0.7)
+        self.retriever = get_retriever()
+        self.tavily_tool = TavilySearchResults()
         
-        self.serpapi_search = SerpAPIWrapper(serpapi_api_key=serpapi_key)
-        self.duckduckgo_search = DuckDuckGoSearchResults()
+        self.prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", RESPONSE_TEMPLATE),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{question}"),
+            ]
+        ).partial(current_date=datetime.now().isoformat())
+        
+        self.agent_chain = initialize_agent(
+            tools=[self.tavily_tool],
+            llm=self.llm,
+            agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+            prompt=self.prompt,
+            verbose=True,
+        )
 
-    def detect_intent(self, query: str) -> str:
-        if any(keyword in query.lower() for keyword in ["search youtube", "youtube video", "youtube"]):
-            return "youtube"
-        if any(keyword in query.lower() for keyword in ["search", "find", "lookup"]):
-            return "search"
-        if any(keyword in query.lower() for keyword in ["weather", "forecast"]):
-            return "weather"
-        if any(keyword in query.lower() for keyword in ["result", "score", "match"]):
-            return "sports"
-        if any(keyword in query.lower() for keyword in ["visualize", "graph", "chart", "plot"]):
-            return "visualization"
-        return "unknown"
+        logging.basicConfig(level=logging.DEBUG)
+        self.logger = logging.getLogger(__name__)
 
-    def search_serpapi(self, query: str) -> str:
+    def run_search(self, query: str) -> dict:
         try:
-            results = self.serpapi_search.run(query)
-            return f"SerpAPI results: {results}"
+            response = self.agent_chain.run({"input": query})
+            self.logger.debug(f"Raw Tavily response: {response}")
+            return {"type": "text", "content": response}
         except Exception as e:
-            return f"Error using SerpAPI: {e}"
-
-    def search_duckduckgo(self, query: str) -> str:
-        try:
-            results = self.duckduckgo_search.run(query)
-            return f"DuckDuckGo results: {results}"
-        except Exception as e:
-            return f"Error using DuckDuckGo: {e}"
-
-    def aggregate_search_results(self, query: str) -> str:
-        serpapi_result = self.search_serpapi(query)
-        duckduckgo_result = self.search_duckduckgo(query)
-        return f"Aggregated results:\n\n{serpapi_result}\n\n{duckduckgo_result}"
-
-    def handle_intent(self, intent: str, query: str) -> dict:
-        if intent == "search":
-            search_result = self.aggregate_search_results(query)
-            return {"type": "text", "content": search_result}
-        if intent == "youtube":
-            search_result = search_youtube(query.replace("search youtube", "").strip())
-            return {"type": "text", "content": search_result}
-        if intent == "weather":
-            weather_result = self.aggregate_search_results(query)  # Assuming similar handling for now
-            return {"type": "text", "content": weather_result}
-        if intent == "sports":
-            sports_result = self.aggregate_search_results(query)  # Assuming similar handling for now
-            return {"type": "text", "content": sports_result}
-        if intent == "visualization":
-            return {"type": "visualization", "content": "Visualization logic not implemented yet."}
-        return {"type": "text", "content": "I don't understand your query."}
+            self.logger.error(f"Error using Tavily: {str(e)}")
+            return {"type": "text", "content": f"Error using Tavily: {str(e)}"}

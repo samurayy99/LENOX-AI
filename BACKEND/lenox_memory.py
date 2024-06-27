@@ -43,7 +43,7 @@ class SQLChatMessageHistory(BaseChatMessageHistory):
         except SQLAlchemyError as e:
             logging.error("Failed to add message: %s", str(e))
 
-    def messages(self, limit: int = 50) -> List[BaseMessage]:
+    def messages(self, limit: int = 20) -> List[BaseMessage]:
         """Retrieve messages, ordered by most recent."""
         try:
             with self.session() as session:

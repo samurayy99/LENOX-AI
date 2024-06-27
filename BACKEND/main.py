@@ -5,9 +5,9 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
-from documents.documents import DocumentHandler
-from lenox import Lenox  # Ensure this imports the updated lenox.py
-from prompts import PromptEngine, PromptEngineConfig
+from documents.documents import DocumentHandler, allowed_file  # Import allowed_file
+from lenox import Lenox
+from prompts import PromptEngine
 from werkzeug.utils import secure_filename
 from tool_imports import import_tools
 import whisper
@@ -20,7 +20,7 @@ whisper_model = whisper.load_model("base")  # Rename the Whisper model for clari
 openai_api_key = os.getenv('OPENAI_API_KEY')
 CORS(app)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'my_secret_key')
-app.config['UPLOAD_FOLDER'] = '/Users/lenox27/LENOX/uploaded_documents'
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', '/Users/lenox27/LENOX-AI/BACKEND/uploaded_documents')
 socketio = SocketIO(app)
 
 # Pass the `app` object to `create_dashboard` to integrate Dash
@@ -36,9 +36,10 @@ app.logger.addHandler(handler)
 tools = import_tools()
 
 # Create instances of your components
-document_handler = DocumentHandler(document_folder="/Users/lenox27/LENOX/uploaded_documents", data_folder="data")
-prompt_engine_config = PromptEngineConfig(context_length=10, max_tokens=4096)
-prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools)
+document_handler = DocumentHandler(document_folder=app.config['UPLOAD_FOLDER'], data_folder="data")
+
+# Initialize the PromptEngine with direct configuration parameters.
+prompt_engine = PromptEngine(tools=tools, model='gpt-3.5-turbo-0125', max_tokens=4096)
 
 # Initialize Lenox with all necessary components
 lenox = Lenox(tools=tools, document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key)
@@ -61,58 +62,110 @@ def log_response(response):
 def index():
     return render_template('index.html')
 
-
 @app.route('/audio/<filename>')
 def serve_audio(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
-    audio_file = request.files.get('file')
-    if not audio_file:
-        return jsonify({'error': 'No file provided'}), 400
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-    # Ensure the filename is not None
-    filename = audio_file.filename
-    if filename:
-        audio_path = secure_filename(filename)
-    else:
-        audio_path = secure_filename("default_filename.wav")
+    audio_file = request.files['file']
+    if audio_file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
 
-    audio_file.save(os.path.join(app.config['UPLOAD_FOLDER'], audio_path))
+    audio_path = 'recording.webm'
+    upload_folder = app.config['UPLOAD_FOLDER']
 
-    # Perform transcription using the Whisper model
-    result = whisper_model.transcribe(os.path.join(app.config['UPLOAD_FOLDER'], audio_path))
-    transcription = result['text']
-    detected_language = result['language']
+    # Ensure the upload directory exists
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
 
-    # Clean up the saved file after processing
-    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], audio_path))
+    try:
+        audio_file.save(os.path.join(upload_folder, audio_path))
+        
+        # Transcription logic using Whisper
+        transcription_result = whisper_model.transcribe(os.path.join(upload_folder, audio_path))
+        transcription = transcription_result['text']
+        
+        return jsonify({"transcription": transcription}), 200
+    except Exception as e:
+        app.logger.error(f"Error saving audio file: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        'transcription': transcription,
-        'language': detected_language
-    })
 
 @app.route('/upload', methods=['POST'])
 def upload_document():
     if 'file' not in request.files:
+        app.logger.debug("No file part in the request.")
         return jsonify({'error': 'No file part in the request'}), 400
 
     file = request.files['file']
-    if file.filename == '':
+    if not file or file.filename == '':
+        app.logger.debug("No file selected.")
         return jsonify({'error': 'No file selected'}), 400
 
+    # Log the file details
+    app.logger.debug(f"Received file: {file.filename}, content length: {file.content_length} bytes, mimetype: {file.mimetype}")
+
+    # Check the actual file content length
+    file.seek(0, os.SEEK_END)
+    actual_length = file.tell()
+    file.seek(0)  # Reset file pointer to the beginning
+    app.logger.debug(f"Actual content length: {actual_length} bytes")
+
+    if actual_length == 0:
+        app.logger.debug("File is empty.")
+        return jsonify({'error': 'File is empty'}), 400
+
     filename = file.filename
-    if filename is not None:
+    if filename and allowed_file(filename):
         filename = secure_filename(filename)
-        success, message = document_handler.save_document(file)
-        if success:
-            return jsonify({'message': message}), 200
-        else:
-            return jsonify({'error': message}), 500
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Ensure the upload directory exists
+        if not os.path.exists(app.config['UPLOAD_FOLDER']):
+            os.makedirs(app.config['UPLOAD_FOLDER'])
+            app.logger.debug(f"Created upload directory: {app.config['UPLOAD_FOLDER']}")
+
+        try:
+            # Log the content of the file before saving
+            file_content = file.read()
+            app.logger.debug(f"File content: {file_content[:100]}...")
+            file.seek(0)  # Reset file pointer to the beginning
+
+            file.save(save_path)
+            app.logger.info(f"File saved to {save_path}.")
+            success, message = document_handler.save_document(file)
+            if success:
+                return jsonify({'message': message}), 200
+            else:
+                return jsonify({'error': message}), 500
+        except Exception as e:
+            app.logger.error(f"Error saving file: {str(e)}")
+            return jsonify({'error': str(e)}), 500
     else:
+        app.logger.debug("Unsupported file type.")
         return jsonify({'error': 'Unsupported file type'}), 400
+
+
+@app.route('/query', methods=['POST'])
+def handle_query():
+    try:
+        data = request.get_json()
+        query = data.get('query', '').lower()
+
+        if not query:
+            app.logger.debug("No query provided in the request.")
+            return jsonify({'error': 'Empty query.'}), 400
+
+        result = lenox.convchain(query, session['session_id'])
+        app.logger.debug(f"Processed query with convchain, result: {result}")
+        return jsonify(result)  # Return the result directly
+    except Exception as e:
+        app.logger.error(f"Error processing request: {str(e)}")
+        return jsonify({'error': 'Failed to process request.'}), 500
 
 @app.route('/document_query', methods=['POST'])
 def document_query():
@@ -123,10 +176,14 @@ def document_query():
             return jsonify({'error': 'Empty query.'}), 400
 
         result = lenox.handle_document_query(query)
-        return jsonify({'type': 'document_response', 'response': result})
+        app.logger.debug(f"Processed document query, result: {result}")
+        
+        # Ensuring the response is properly formatted as JSON
+        return jsonify(result)
     except Exception as e:
         app.logger.error(f"Error processing document query: {e}")
         return jsonify({'error': 'Failed to process document query.'}), 500
+
 
 @app.route('/synthesize', methods=['POST'])
 def synthesize_speech():
@@ -149,22 +206,7 @@ def synthesize_speech():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/query', methods=['POST'])
-def handle_query():
-    try:
-        data = request.get_json()
-        query = data.get('query', '').lower()
 
-        if not query:
-            app.logger.debug("No query provided in the request.")
-            return jsonify({'error': 'Empty query.'}), 400
-
-        result = lenox.convchain(query, session['session_id'])
-        app.logger.debug(f"Processed query with convchain, result: {result}")
-        return jsonify(result)
-    except Exception as e:
-        app.logger.error(f"Error processing request: {str(e)}")
-        return jsonify({'error': 'Failed to process request.'}), 500
 
 @app.route('/feedback', methods=['POST'])
 def handle_feedback():
@@ -186,9 +228,10 @@ def search():
     query = request.json.get('query')
     if not query:
         return jsonify({'error': 'Empty query.'}), 400
-    search_results = lenox.web_search_manager.aggregate_search_results(query)
-    app.logger.debug(f"Search results: {search_results}")
-    return jsonify({'type': 'search_results', 'results': search_results})
+    app.logger.debug(f"Query received: {query}")
+    search_results = lenox.web_search_manager.run_search(query)
+    app.logger.debug(f"Search results before formatting: {search_results}")
+    return jsonify(search_results)
 
 @app.route('/create_visualization', methods=['POST'])
 def create_visualization():
