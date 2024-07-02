@@ -4,10 +4,11 @@ from textblob import TextBlob
 from langchain.agents import tool  # Use the @tool decorator
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import os
-from typing import List, Union
+from typing import List
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import string
+from praw.models import MoreComments  # Add this import
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -39,6 +40,7 @@ def count_mentions(subreddit: str, keyword: str, time_filter='week') -> str:
     mentions = sum(1 for _ in reddit.subreddit(subreddit).search(keyword, time_filter=time_filter))
     return f"'{keyword}' was mentioned {mentions} times in r/{subreddit} over the past {time_filter}."
 
+
 @tool
 def analyze_sentiment(subreddit: str, keyword: str, time_filter='week') -> str:
     """
@@ -56,7 +58,7 @@ def analyze_sentiment(subreddit: str, keyword: str, time_filter='week') -> str:
         sentiment_scores.append(analysis_vader['compound'])
         
         for comment in submission.comments.list():
-            if isinstance(comment, praw.models.MoreComments):
+            if isinstance(comment, MoreComments):  # Use the imported MoreComments
                 continue
             analysis_tb = TextBlob(comment.body)
             sentiment_scores.append(analysis_tb.sentiment.polarity)
@@ -72,6 +74,7 @@ def analyze_sentiment(subreddit: str, keyword: str, time_filter='week') -> str:
         sentiment_description = "No sentiment data available."
 
     return f"Average sentiment for '{keyword}' in r/{subreddit} over the past {time_filter}: {average_sentiment:.2f} ({sentiment_description})"
+
 
 def interpret_sentiment(score: float) -> str:
     """

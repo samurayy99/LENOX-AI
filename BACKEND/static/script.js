@@ -119,6 +119,8 @@ document.getElementById('uploadForm').addEventListener('submit', function (event
     });
 });
 
+
+
 function appendMessage(message, className, shouldIncludeAudio = false) {
     const chatMessages = document.getElementById('chat-messages');
     const messageDiv = document.createElement('div');
@@ -155,7 +157,6 @@ function appendMessage(message, className, shouldIncludeAudio = false) {
     chatMessages.appendChild(messageDiv);
     scrollToLatestMessage();
 }
-
 
 document.querySelectorAll('.dropdown-content a').forEach(item => {
     item.addEventListener('click', function (e) {
@@ -225,8 +226,6 @@ function appendVisualizationPlaceholder() {
     return visualizationPlaceholder;
 }
 
-
-
 function processResponseData(data) {
     console.log("Received data from server:", data);
     try {
@@ -260,8 +259,6 @@ function processResponseData(data) {
         appendMessage(`Error processing response: ${error.message}`, 'error-message');
     }
 }
-
-
 
 function convertUrlsToLinks(text) {
     const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;

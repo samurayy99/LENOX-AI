@@ -12,6 +12,9 @@ from langchain_openai import OpenAIEmbeddings  # Updated import
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 
+
+
+
 # Load environment variables from .env file
 load_dotenv()
 
