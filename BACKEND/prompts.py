@@ -2,6 +2,7 @@ import logging
 from typing import Dict, List, Any
 from enum import Enum
 import re
+from web_search import WebSearchManager  # Ensure the correct import path
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class PromptEngine:
     def __init__(self, config: PromptEngineConfig, tools: List[Any] = []):
         self.config = config
         self.tools = {f"tool_{i}": tool for i, tool in enumerate(tools)}
+        self.web_search_manager = WebSearchManager()  # Initialize WebSearchManager
 
     def preprocess_query(self, user_query: str) -> str:
         query = user_query.strip().lower()
@@ -88,7 +90,7 @@ class PromptEngine:
         intent = self.classify_intent(user_query)
         logger.debug(f"Classified intent: {intent}")
         if intent == IntentType.SEARCH:
-            return {"response": "Search functionality is not implemented."}
+            return self.web_search_manager.run_search(user_query)  # Use WebSearchManager
         elif intent == IntentType.VISUALIZATION:
             return self.visualization_response(user_query)
         elif intent == IntentType.EMOTIONAL_SUPPORT:
@@ -135,5 +137,36 @@ class PromptEngine:
         # Placeholder for interaction logging logic
         logger.debug(f"Interaction logged: {input} -> {response}")
 
+    def detect_intent(self, query: str) -> str:
+        if any(keyword in query.lower() for keyword in ["search youtube", "youtube video", "youtube"]):
+            return "youtube"
+        if any(keyword in query.lower() for keyword in ["search", "find", "lookup"]):
+            return "search"
+        if any(keyword in query.lower() for keyword in ["weather", "forecast"]):
+            return "weather"
+        if any(keyword in query.lower() for keyword in ["result", "score", "match"]):
+            return "sports"
+        if any(keyword in query.lower() for keyword in ["visualize", "graph", "chart", "plot"]):
+            return "visualization"
+        return "unknown"
+
+    def handle_intent(self, intent: str, query: str) -> dict:
+        if intent == "search":
+            return self.web_search_manager.run_search(query)  # Use WebSearchManager
+        if intent == "youtube":
+            search_result = self.search_youtube(query.replace("search youtube", "").strip())
+            return {"type": "text", "content": search_result}
+        if intent == "weather":
+            return self.web_search_manager.run_search(query)  # Assuming similar handling for now
+        if intent == "sports":
+            return self.web_search_manager.run_search(query)  # Assuming similar handling for now
+        if intent == "visualization":
+            return {"type": "visualization", "content": "Visualization logic not implemented yet."}
+        return {"type": "text", "content": "I don't understand your query."}
+
     def update_tools(self, new_tools: Dict[str, Any]):
         self.tools.update(new_tools)
+
+    def search_youtube(self, query: str) -> str:
+        # Placeholder for YouTube search logic
+        return f"Searching YouTube for: {query}"

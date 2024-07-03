@@ -1,8 +1,8 @@
 from reddit_tools import get_reddit_data, count_mentions, analyze_sentiment, find_trending_topics
 from cryptocompare_tools import (
-    get_current_price as get_crypto_compare_current_price, get_top_volume_symbols,
+    get_current_price, get_top_volume_symbols,
     get_latest_social_stats, get_historical_social_stats, list_news_feeds_and_categories,
-    get_latest_trading_signals as get_crypto_compare_latest_trading_signals, get_top_exchanges_by_volume, get_historical_daily
+    get_latest_trading_signals, get_top_exchanges_by_volume, get_historical_daily
 )
 from coingecko_tools import (
     get_market_data, get_historical_market_data, get_ohlc,
@@ -17,8 +17,6 @@ from whale_alert_tools import get_whale_alert_status, get_transaction_by_hash, g
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 from integration_tools import get_current_price, get_historical_prices, comment_on_price
 
-
-
 def import_tools():
     """
     Collects and returns a list of functions for various external data retrieval and processing tasks.
@@ -27,12 +25,12 @@ def import_tools():
     """
     tools = [
         # CryptoCompare Tools
-        get_crypto_compare_current_price,  # Retrieves the current price of a specified cryptocurrency.
+        get_current_price,  # Retrieves the current price of a specified cryptocurrency.
         get_top_volume_symbols,  # Retrieves the top cryptocurrencies by trading volume.
         get_latest_social_stats,  # Retrieves the latest social media statistics for a specified cryptocurrency.
         get_historical_social_stats,  # Retrieves historical social media statistics for a specified cryptocurrency.
         list_news_feeds_and_categories,  # Lists available news feeds and their categories from CryptoCompare.
-        get_crypto_compare_latest_trading_signals,  # Retrieves the latest trading signals from CryptoCompare.
+        get_latest_trading_signals,  # Retrieves the latest trading signals from CryptoCompare.
         get_top_exchanges_by_volume,  # Retrieves the top cryptocurrency exchanges by trading volume.
         get_historical_daily,  # Retrieves the daily historical data for a specific cryptocurrency in a given currency.
 

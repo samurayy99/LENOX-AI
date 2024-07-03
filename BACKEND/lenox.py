@@ -67,10 +67,10 @@ class Lenox:
         chat_history = self.memory.messages()
 
         # Use the intent detection from WebSearchManager
-        intent = self.web_search_manager.detect_intent(query)
+        intent = self.prompt_engine.detect_intent(query)
 
         # Handle intent using the WebSearchManager
-        response = self.web_search_manager.handle_intent(intent, query)
+        response = self.prompt_engine.handle_intent(intent, query)
 
         # If response type is text, add to memory
         if response["type"] == "text":

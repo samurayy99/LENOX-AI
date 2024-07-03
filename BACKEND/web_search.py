@@ -11,7 +11,7 @@ from langchain.retrievers.document_compressors import DocumentCompressorPipeline
 from langchain_openai import OpenAIEmbeddings  # Updated import
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
-from youtube_tools import search_youtube
+
 
 
 
@@ -109,29 +109,3 @@ class WebSearchManager:
             self.logger.error(f"Error using Tavily: {str(e)}")
             return {"type": "text", "content": f"Error using Tavily: {str(e)}"}
         
-    def detect_intent(self, query: str) -> str:
-        if any(keyword in query.lower() for keyword in ["search youtube", "youtube video", "youtube"]):
-            return "youtube"
-        if any(keyword in query.lower() for keyword in ["search", "find", "lookup"]):
-            return "search"
-        if any(keyword in query.lower() for keyword in ["weather", "forecast"]):
-            return "weather"
-        if any(keyword in query.lower() for keyword in ["result", "score", "match"]):
-            return "sports"
-        if any(keyword in query.lower() for keyword in ["visualize", "graph", "chart", "plot"]):
-            return "visualization"
-        return "unknown"
-    
-    def handle_intent(self, intent: str, query: str) -> dict:
-        if intent == "search":
-            return self.run_search(query)
-        if intent == "youtube":
-            search_result = search_youtube(query.replace("search youtube", "").strip())
-            return {"type": "text", "content": search_result}
-        if intent == "weather":
-            return self.run_search(query)  # Assuming similar handling for now
-        if intent == "sports":
-            return self.run_search(query)  # Assuming similar handling for now
-        if intent == "visualization":
-            return {"type": "visualization", "content": "Visualization logic not implemented yet."}
-        return {"type": "text", "content": "I don't understand your query."}
