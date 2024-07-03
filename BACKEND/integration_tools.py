@@ -40,8 +40,3 @@ def comment_on_price(symbol):
         return f"The price of {symbol} is relatively low at {current_price} USD, compared to the average historical price of {avg_historical_price} USD. This could be a buying opportunity."
     else:
         return f"The price of {symbol} is stable at {current_price} USD, compared to the average historical price of {avg_historical_price} USD. Consider holding your assets."
-
-# Beispielaufruf
-symbol = 'BTCUSDT'
-comment = comment_on_price(symbol)
-print(comment)

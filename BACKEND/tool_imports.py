@@ -15,9 +15,9 @@ from coinmarketcap_tools import get_latest_listings, get_crypto_metadata, get_gl
 from fearandgreed_tools import get_fear_and_greed_index
 from whale_alert_tools import get_whale_alert_status, get_transaction_by_hash, get_recent_transactions
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
+from integration_tools import get_current_price, get_historical_prices, comment_on_price
 
-# Neue Funktionen importieren
-from integration_tools import get_current_price, get_historical_prices, comment_on_price, get_latest_trading_signals, comment_on_trading_signals
+
 
 def import_tools():
     """
@@ -64,33 +64,30 @@ def import_tools():
 
         # CryptoPanic Tools
         get_latest_news,  # Retrieves the latest news from CryptoPanic.
-        get_news_sources,  # Retrieves available news sources from CryptoPanic.
-        get_last_news_title,  # Retrieves the title of the latest news article from CryptoPanic.
+        get_news_sources,  # Retrieves a list of news sources from CryptoPanic.
+        get_last_news_title,  # Retrieves the title of the most recent news article from CryptoPanic.
 
         # CoinMarketCap Tools
-        get_latest_listings,  # Retrieves the latest cryptocurrency listings from CoinMarketCap.
-        get_crypto_metadata,  # Retrieves metadata for a specified cryptocurrency from CoinMarketCap.
-        get_global_metrics,  # Retrieves global metrics for the cryptocurrency market from CoinMarketCap.
+        get_latest_listings,  # Retrieves the latest listings of cryptocurrencies from CoinMarketCap.
+        get_crypto_metadata,  # Retrieves metadata for a specified cryptocurrency.
+        get_global_metrics,  # Retrieves global metrics for the cryptocurrency market.
 
         # Fear and Greed Index Tools
-        get_fear_and_greed_index,  # Retrieves the current Fear and Greed Index for the cryptocurrency market.
+        get_fear_and_greed_index,  # Retrieves the Fear and Greed Index for the cryptocurrency market.
 
         # Whale Alert Tools
         get_whale_alert_status,  # Retrieves the current status of Whale Alert.
-        get_transaction_by_hash,  # Retrieves details of a cryptocurrency transaction by its hash.
-        get_recent_transactions,  # Retrieves recent large cryptocurrency transactions (whale alerts).
+        get_transaction_by_hash,  # Retrieves details of a specific transaction by its hash.
+        get_recent_transactions,  # Retrieves recent large transactions in the cryptocurrency market.
 
         # Binance Tools
-        get_binance_ticker,  # Retrieves the current ticker information from Binance for a specified cryptocurrency.
-        get_binance_order_book,  # Retrieves the order book from Binance for a specified cryptocurrency.
-        get_binance_recent_trades,  # Retrieves recent trades from Binance for a specified cryptocurrency.
+        get_binance_ticker,  # Retrieves the current ticker price from Binance.
+        get_binance_order_book,  # Retrieves the order book for a specified cryptocurrency on Binance.
+        get_binance_recent_trades,  # Retrieves recent trades for a specified cryptocurrency on Binance.
 
-        # Neue Funktionen
-        get_current_price,  # Retrieves the current price of a specified cryptocurrency from Binance.
-        get_historical_prices,  # Retrieves historical prices of a specified cryptocurrency from Binance.
-        comment_on_price,  # Analyzes the current price of a cryptocurrency against its historical prices and provides a comment.
-        get_latest_trading_signals,  # Retrieves the latest trading signals from CryptoCompare.
-        comment_on_trading_signals,  # Analyzes the latest trading signals and provides comments.
+        # Integration Tools
+        get_current_price,
+        get_historical_prices,
+        comment_on_price,
     ]
-
     return tools

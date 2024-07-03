@@ -2,7 +2,6 @@ import logging
 from typing import Dict, List, Any
 from enum import Enum
 import re
-from web_search import WebSearchManager  # Import WebSearchManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -39,7 +38,6 @@ class PromptEngine:
     def __init__(self, config: PromptEngineConfig, tools: List[Any] = []):
         self.config = config
         self.tools = {f"tool_{i}": tool for i, tool in enumerate(tools)}
-        self.web_search_manager = WebSearchManager()  # Initialize WebSearchManager
 
     def preprocess_query(self, user_query: str) -> str:
         query = user_query.strip().lower()
@@ -90,8 +88,7 @@ class PromptEngine:
         intent = self.classify_intent(user_query)
         logger.debug(f"Classified intent: {intent}")
         if intent == IntentType.SEARCH:
-            response = self.web_search_manager.run_search(user_query)
-            return response
+            return {"response": "Search functionality is not implemented."}
         elif intent == IntentType.VISUALIZATION:
             return self.visualization_response(user_query)
         elif intent == IntentType.EMOTIONAL_SUPPORT:

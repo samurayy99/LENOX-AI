@@ -14,31 +14,6 @@ from prompts import PromptEngine, PromptEngineConfig
 import requests
 import json
 from web_search import WebSearchManager
-from rich.console import Console
-
-console = Console()
-
-def format_response(response: dict) -> dict:
-    """
-    Format the response for better readability.
-
-    Parameters:
-    - response (dict): The original response dictionary.
-
-    Returns:
-    - dict: The formatted response dictionary.
-    """
-    if response["type"] == "text":
-        formatted_content = response['content']
-    elif response["type"] == "visualization":
-        formatted_content = response['content']  # Do not double-format visualization content
-    elif response["type"] == "document_response":
-        formatted_content = response['response']  # Already a structured response, no need for JSON formatting
-    else:
-        formatted_content = f"**Unknown response type:** {response['type']}"
-
-    return {"type": response["type"], "content": formatted_content}
-
 
 
 class Lenox:
@@ -91,18 +66,21 @@ class Lenox:
         self.memory.add_message(new_message)
         chat_history = self.memory.messages()
 
-        # Use the handle_query method from PromptEngine
-        response = self.prompt_engine.handle_query(query)
+        # Use the intent detection from WebSearchManager
+        intent = self.web_search_manager.detect_intent(query)
+
+        # Handle intent using the WebSearchManager
+        response = self.web_search_manager.handle_intent(intent, query)
 
         # If response type is text, add to memory
-        if response.get("type") == "text":
+        if response["type"] == "text":
             self.memory.add_message(AIMessage(content=response["content"]))
-        elif response.get("type") == "visualization":
+        elif response["type"] == "visualization":
             # If visualization, handle visualization logic
             return self.handle_visualization_query(query, session_id=session_id)
 
-        # If response type is not handled, use general conversational handling
-        if response.get("type") not in ["text", "visualization"]:
+        # If intent is unknown or response type is not handled, use general conversational handling
+        if intent == "unknown" or response["type"] not in ["text", "visualization"]:
             result = self.qa.invoke({"input": query, "chat_history": chat_history})
             output = result.get('output', 'Error processing the request.')
 

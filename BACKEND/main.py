@@ -13,7 +13,6 @@ from tool_imports import import_tools
 import whisper
 from dashboards.dashboard import create_dashboard
 
-
 # Load environment variables
 load_dotenv()
 app = Flask(__name__)
@@ -43,9 +42,6 @@ prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools)
 
 # Initialize Lenox with all necessary components
 lenox = Lenox(tools=tools, document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key)
-
-
-
 
 @app.route('/dashboard')
 def dashboard_page():
