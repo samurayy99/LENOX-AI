@@ -226,6 +226,8 @@ function appendVisualizationPlaceholder() {
     return visualizationPlaceholder;
 }
 
+
+
 function processResponseData(data) {
     console.log("Received data from server:", data);
     try {
@@ -234,7 +236,13 @@ function processResponseData(data) {
                 handleVisualResponse(data);
                 break;
             case 'text':
-                appendMessage(convertUrlsToLinks(data.content), 'bot-message', true);
+                if (typeof data.content === 'string') {
+                    appendMessage(convertUrlsToLinks(data.content), 'bot-message', true);
+                } else if (typeof data.content === 'object' && 'response' in data.content) {
+                    appendMessage(convertUrlsToLinks(data.content.response), 'bot-message', true);
+                } else {
+                    throw new Error('Invalid text response structure.');
+                }
                 break;
             case 'document_response':
                 if (Array.isArray(data.content)) {
@@ -259,6 +267,8 @@ function processResponseData(data) {
         appendMessage(`Error processing response: ${error.message}`, 'error-message');
     }
 }
+
+
 
 function convertUrlsToLinks(text) {
     const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;

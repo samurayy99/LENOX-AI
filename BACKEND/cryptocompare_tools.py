@@ -66,7 +66,6 @@ def list_news_feeds_and_categories() -> str:
         raise APIError(response.status_code, str(e))
     
     
-
 @tool
 def get_latest_trading_signals(coin_symbol: str) -> str:
     """Fetches the latest trading signals for a specified cryptocurrency symbol."""
@@ -77,8 +76,7 @@ def get_latest_trading_signals(coin_symbol: str) -> str:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
-        coin_url = f"https://www.cryptocompare.com/coins/{coin_symbol}/overview"
-        return f"Latest trading signals for {coin_symbol}: {data}. More details at: {coin_url}"
+        return f"Latest trading signals for {coin_symbol}: {data}."
     except requests.RequestException as e:
         raise APIError(response.status_code, str(e))
 
