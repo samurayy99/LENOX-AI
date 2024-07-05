@@ -31,6 +31,14 @@ from fearandgreed_tools import get_fear_and_greed_index
 from whale_alert_tools import get_whale_alert_status, get_transaction_by_hash, get_recent_transactions
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 
+# Define tool wrappers
+class ToolWrapper:
+    def __init__(self, func):
+        self.func = func
+
+    def run(self, params):
+        return self.func(**params)
+
 # Define tool metadata
 tool_metadata = {
     # Reddit Tools
@@ -217,54 +225,54 @@ class IntentRouter:
     def __init__(self):
         self.tools = {
             # Reddit Tools
-            "get_reddit_data": get_reddit_data,
-            "count_mentions": count_mentions,
-            "analyze_sentiment": analyze_sentiment,
-            "find_trending_topics": find_trending_topics,
+            "get_reddit_data": ToolWrapper(get_reddit_data),
+            "count_mentions": ToolWrapper(count_mentions),
+            "analyze_sentiment": ToolWrapper(analyze_sentiment),
+            "find_trending_topics": ToolWrapper(find_trending_topics),
             # CryptoCompare Tools
-            "get_current_price": get_current_price,
-            "get_top_volume_symbols": get_top_volume_symbols,
-            "get_latest_social_stats": get_latest_social_stats,
-            "get_historical_social_stats": get_historical_social_stats,
-            "list_news_feeds_and_categories": list_news_feeds_and_categories,
-            "get_latest_trading_signals": get_latest_trading_signals,
-            "get_top_exchanges_by_volume": get_top_exchanges_by_volume,
-            "get_historical_daily": get_historical_daily,
+            "get_current_price": ToolWrapper(get_current_price),
+            "get_top_volume_symbols": ToolWrapper(get_top_volume_symbols),
+            "get_latest_social_stats": ToolWrapper(get_latest_social_stats),
+            "get_historical_social_stats": ToolWrapper(get_historical_social_stats),
+            "list_news_feeds_and_categories": ToolWrapper(list_news_feeds_and_categories),
+            "get_latest_trading_signals": ToolWrapper(get_latest_trading_signals),
+            "get_top_exchanges_by_volume": ToolWrapper(get_top_exchanges_by_volume),
+            "get_historical_daily": ToolWrapper(get_historical_daily),
             # CoinGecko Tools
-            "get_market_data": get_market_data,
-            "get_historical_market_data": get_historical_market_data,
-            "get_ohlc": get_ohlc,
-            "get_trending_cryptos": get_trending_cryptos,
-            "calculate_macd": calculate_macd,
-            "get_exchange_rates": get_exchange_rates,
-            "calculate_rsi": calculate_rsi,
+            "get_market_data": ToolWrapper(get_market_data),
+            "get_historical_market_data": ToolWrapper(get_historical_market_data),
+            "get_ohlc": ToolWrapper(get_ohlc),
+            "get_trending_cryptos": ToolWrapper(get_trending_cryptos),
+            "calculate_macd": ToolWrapper(calculate_macd),
+            "get_exchange_rates": ToolWrapper(get_exchange_rates),
+            "calculate_rsi": ToolWrapper(calculate_rsi),
             # YouTube Tools
-            "search_youtube": search_youtube,
-            "process_youtube_video": process_youtube_video,
-            "query_youtube_video": query_youtube_video,
+            "search_youtube": ToolWrapper(search_youtube),
+            "process_youtube_video": ToolWrapper(process_youtube_video),
+            "query_youtube_video": ToolWrapper(query_youtube_video),
             # CoinPaprika Tools
-            "get_coin_details": get_coin_details,
-            "get_coin_tags": get_coin_tags,
-            "get_market_overview": get_market_overview,
-            "get_ticker_info": get_ticker_info,
+            "get_coin_details": ToolWrapper(get_coin_details),
+            "get_coin_tags": ToolWrapper(get_coin_tags),
+            "get_market_overview": ToolWrapper(get_market_overview),
+            "get_ticker_info": ToolWrapper(get_ticker_info),
             # CryptoPanic Tools
-            "get_latest_news": get_latest_news,
-            "get_news_sources": get_news_sources,
-            "get_last_news_title": get_last_news_title,
+            "get_latest_news": ToolWrapper(get_latest_news),
+            "get_news_sources": ToolWrapper(get_news_sources),
+            "get_last_news_title": ToolWrapper(get_last_news_title),
             # CoinMarketCap Tools
-            "get_latest_listings": get_latest_listings,
-            "get_crypto_metadata": get_crypto_metadata,
-            "get_global_metrics": get_global_metrics,
+            "get_latest_listings": ToolWrapper(get_latest_listings),
+            "get_crypto_metadata": ToolWrapper(get_crypto_metadata),
+            "get_global_metrics": ToolWrapper(get_global_metrics),
             # Fear and Greed Index Tools
-            "get_fear_and_greed_index": get_fear_and_greed_index,
+            "get_fear_and_greed_index": ToolWrapper(get_fear_and_greed_index),
             # Whale Alert Tools
-            "get_whale_alert_status": get_whale_alert_status,
-            "get_transaction_by_hash": get_transaction_by_hash,
-            "get_recent_transactions": get_recent_transactions,
+            "get_whale_alert_status": ToolWrapper(get_whale_alert_status),
+            "get_transaction_by_hash": ToolWrapper(get_transaction_by_hash),
+            "get_recent_transactions": ToolWrapper(get_recent_transactions),
             # Binance Tools
-            "get_binance_ticker": get_binance_ticker,
-            "get_binance_order_book": get_binance_order_book,
-            "get_binance_recent_trades": get_binance_recent_trades
+            "get_binance_ticker": ToolWrapper(get_binance_ticker),
+            "get_binance_order_book": ToolWrapper(get_binance_order_book),
+            "get_binance_recent_trades": ToolWrapper(get_binance_recent_trades)
         }
         self.tool_metadata = tool_metadata
         self.chat_model = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
@@ -334,6 +342,6 @@ class IntentRouter:
 # Example of initializing and using the IntentRouter
 if __name__ == "__main__":
     router = IntentRouter()
-    query = "What are the last 5 day prices for ethereum?"
+    query = "What is the price of bitcoin now?"
     response = router.route_query(query)
     print(response)

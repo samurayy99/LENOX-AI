@@ -29,11 +29,11 @@ class PromptEngine:
     def initialize_chat_model(self) -> ChatOpenAI:
         return ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.7)
 
+    # Modify the handle_query method
     def handle_query(self, user_query: str, context_messages: List[str]) -> Dict[str, Any]:
         logger.debug(f"Handling query: {user_query}")
         logger.debug(f"Context messages: {context_messages}")
 
-        # Use detect_intent instead of identify_relevant_tools
         detected_intents = self.intent_router.detect_intent(user_query)
         logger.debug(f"Detected intents: {detected_intents}")
 

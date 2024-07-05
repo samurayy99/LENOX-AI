@@ -15,6 +15,8 @@ import json
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from web_search import WebSearchManager
 import logging
+from router import IntentRouter
+
 
 class Lenox:
     def __init__(self, tools, document_handler, prompt_engine=None, connection_string="sqlite:///lenox.db", openai_api_key=None, intent_router=None):
@@ -26,7 +28,7 @@ class Lenox:
         
         # Add system prompt
         self.system_prompt = SystemMessage(content=system_prompt_content)
-        
+        self.intent_router = intent_router if intent_router else IntentRouter()  # Initialize IntentRouter
         self.prompt = self.configure_prompts() 
         self.web_search_manager = WebSearchManager()
         self.setup_components(tools)
