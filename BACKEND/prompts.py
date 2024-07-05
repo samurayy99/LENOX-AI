@@ -33,8 +33,9 @@ class PromptEngine:
         logger.debug(f"Handling query: {user_query}")
         logger.debug(f"Context messages: {context_messages}")
 
-        relevant_tools = self.intent_router.identify_relevant_tools(user_query)
-        logger.debug(f"Relevant tools: {relevant_tools}")
+        # Use detect_intent instead of identify_relevant_tools
+        detected_intents = self.intent_router.detect_intent(user_query)
+        logger.debug(f"Detected intents: {detected_intents}")
 
         response = self.intent_router.route_query(user_query)
         if not response:
@@ -60,7 +61,6 @@ class PromptEngine:
             raise ValueError("Unexpected response format from chat model")
 
     def generate_dynamic_prompt(self, user_query: str, context_messages: List[str]) -> str:
-        """Generate a dynamic prompt based on user query and context messages."""
         context = "\n".join(context_messages)
         return f"{context}\n\nUser: {user_query}\nAI:"
 
