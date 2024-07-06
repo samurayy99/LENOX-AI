@@ -1,57 +1,48 @@
 import sqlite3
 from typing import Dict, List, Union, Any
 from visualize_data import VisualizationConfig, create_visualization
+from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
-from langchain.agents import create_react_agent
+from langchain.agents import AgentExecutor
 from langchain.schema.runnable import RunnablePassthrough
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain.agents.format_scratchpad import format_to_openai_functions
 from lenox_memory import SQLChatMessageHistory
-from prompts import PromptEngine, PromptEngineConfig, system_prompt_content  # Import the system prompt content
+from web_search import WebSearchManager
 import requests
 import json
-from langchain.schema import HumanMessage, AIMessage, SystemMessage
-from web_search import WebSearchManager
-import logging
+
+# Import system prompt content from prompts.py
+from prompts import system_prompt_content, PromptEngineConfig, PromptEngine
 
 class Lenox:
-    def __init__(self, tools, document_handler, prompt_engine=None, connection_string="sqlite:///lenox.db", openai_api_key=None, intent_router=None):
+    def __init__(self, tools, document_handler, prompt_engine=None, connection_string="sqlite:///lenox.db", openai_api_key=None):
         self.document_handler = document_handler
         self.prompt_engine = prompt_engine if prompt_engine else PromptEngine(config=PromptEngineConfig(), tools=tools)
         self.memory = SQLChatMessageHistory(session_id="my_session", connection_string=connection_string)
-        self.openai_api_key = openai_api_key
+        self.openai_api_key = openai_api_key  # Save the API key
         self.db_path = 'lenox.db'
-        
-        # Add system prompt
-        self.system_prompt = SystemMessage(content=system_prompt_content)
-        
-        self.prompt = self.configure_prompts() 
         self.web_search_manager = WebSearchManager()
         self.setup_components(tools)
         self._init_feedback_table()
 
-        # Set up logger
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(level=logging.INFO)
-
     def setup_components(self, tools):
-        # Initialize the OpenAI chat model and bind tools
-        self.model = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.8)
+        self.functions = [convert_to_openai_function(f) for f in tools]
+        self.model = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.8).bind(functions=self.functions)
+        self.prompt = self.configure_prompts()
         self.chain = self.setup_chain()
-        self.qa = create_react_agent(llm=self.model, tools=tools, prompt=self.prompt)  # Added prompt parameter
+        self.qa = AgentExecutor(agent=self.chain, tools=tools, verbose=False)
 
     def configure_prompts(self):
         """Configure the prompt template."""
         return ChatPromptTemplate.from_messages([
-            SystemMessage(content=self.system_prompt.content),  # Corrected type
-            HumanMessage(content="Hi Lenox!"),  # Corrected type
+            ("system", system_prompt_content),
+            ("user", "Hi Lenox!"),
             MessagesPlaceholder(variable_name="chat_history"),
-            HumanMessage(content="{input}"),  # Corrected type
+            ("user", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
-            MessagesPlaceholder(variable_name="tools"),  # Added tools variable
-            MessagesPlaceholder(variable_name="tool_names"),  # Added tool_names variable
         ])
 
     def setup_chain(self):
@@ -65,6 +56,7 @@ class Lenox:
             | OpenAIFunctionsAgentOutputParser()
         )
 
+    
     def convchain(self, query: str, session_id: str = "my_session") -> dict:
         """Process a user query."""
         if not query:
@@ -75,44 +67,18 @@ class Lenox:
         self.memory.add_message(new_message)
         chat_history = self.memory.messages()
 
-        # Include the system prompt in the context messages
-        context_messages = [self.system_prompt.content] + [msg.content for msg in chat_history if isinstance(msg.content, str)]
+        # General conversational handling
+        result = self.qa.invoke({"input": query, "chat_history": chat_history})
+        output = result.get('output', 'Error processing the request.')
 
-        try:
-            # Ensure context_messages is a list of strings
-            context_messages = [str(msg) for msg in context_messages]
+        # Ensure output is a string
+        if not isinstance(output, str):
+            output = str(output)
 
-            # Debug: Log the context messages
-            self.logger.debug(f"Context messages: {context_messages}")
-
-            response = self.prompt_engine.handle_query(query, context_messages=context_messages)  # Pass context_messages as a list of strings
-
-            if response.get("type") == "text":
-                ai_message = AIMessage(content=str(response["content"]))  # Ensure content is a string
-                self.memory.add_message(ai_message)
-                return {"type": "text", "content": ai_message.content}
-            elif response.get("type") == "visualization":
-                return self.handle_visualization_query(query, session_id=session_id)
-
-            if not response:
-                result = self.qa.invoke({"input": query, "chat_history": [msg.content for msg in chat_history if isinstance(msg.content, str)]})
-                output = result.get('output', 'Error processing the request.')
-
-                if not isinstance(output, str):
-                    output = str(output)
-
-                ai_message = AIMessage(content=output)
-                self.memory.add_message(ai_message)
-                return {"type": "text", "content": output}
-
-            return response
-
-        except Exception as e:
-            self.logger.error(f"Error processing request: {e}")
-            raise e
+        self.memory.add_message(AIMessage(content=output))
+        return {"type": "text", "content": output}
 
 
-            
 
 
     def is_visualization_query(self, query: str) -> bool:

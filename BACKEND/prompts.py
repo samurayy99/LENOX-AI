@@ -4,7 +4,6 @@ from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, BaseMessage, SystemMessage
 from web_search import WebSearchManager
 
-
 # Set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -23,7 +22,7 @@ class PromptEngine:
         self.system_prompt = SystemMessage(content=system_prompt_content)
 
     def initialize_chat_model(self) -> ChatOpenAI:
-        return ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.7)
+        return ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.7)
     
     def handle_query(self, user_query: str, context_messages: List[str]) -> Dict[str, Any]:
         logger.debug(f"Handling query: {user_query}")
@@ -32,6 +31,14 @@ class PromptEngine:
         response = self.fetch_response_from_model(user_query, context_messages)
 
         logger.debug(f"Final response structure: {response}")
+
+        # Check if the response should trigger a tool
+        if "tool" in response:
+            tool_name = response["tool"]
+            if tool_name in self.tools:
+                tool = self.tools[tool_name]
+                tool_response = tool.run(user_query)
+                return {"type": "text", "content": tool_response}
 
         return {"type": "text", "content": response["response"]}
 

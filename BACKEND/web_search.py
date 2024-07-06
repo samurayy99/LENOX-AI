@@ -11,6 +11,7 @@ from langchain.retrievers.document_compressors import DocumentCompressorPipeline
 from langchain_openai import OpenAIEmbeddings  # Updated import
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
+from langchain.tools import tool
 
 
 
@@ -77,7 +78,7 @@ def get_retriever():
 class WebSearchManager:
     def __init__(self):
         # Set up the agent
-        self.llm = ChatOpenAI(model="gpt-4", temperature=0.7)
+        self.llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.7)
         self.retriever = get_retriever()
         self.tavily_tool = TavilySearchResults()
         
@@ -99,13 +100,17 @@ class WebSearchManager:
 
         logging.basicConfig(level=logging.DEBUG)
         self.logger = logging.getLogger(__name__)
-
-    def run_search(self, query: str) -> dict:
-        try:
-            response = self.agent_chain.run({"input": query})
-            self.logger.debug(f"Raw Tavily response: {response}")
-            return {"type": "text", "content": response}
-        except Exception as e:
-            self.logger.error(f"Error using Tavily: {str(e)}")
-            return {"type": "text", "content": f"Error using Tavily: {str(e)}"}
+        
+@tool
+def run_search(self, query: str) -> dict:
+    """
+    Perform a web search using the provided query and return the results.
+    """
+    try:
+        response = self.agent_chain.run({"input": query})
+        self.logger.debug(f"Raw Tavily response: {response}")
+        return {"type": "text", "content": response}
+    except Exception as e:
+        self.logger.error(f"Error using Tavily: {str(e)}")
+        return {"type": "text", "content": f"Error using Tavily: {str(e)}"}
         

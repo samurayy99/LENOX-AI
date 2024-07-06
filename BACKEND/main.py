@@ -12,6 +12,7 @@ from werkzeug.utils import secure_filename
 from tool_imports import import_tools
 import whisper
 from dashboards.dashboard import create_dashboard
+from web_search import WebSearchManager
 
 # Load environment variables
 load_dotenv()
@@ -35,10 +36,16 @@ app.logger.addHandler(handler)
 # Import tools before they are used
 tools = import_tools()
 
+# Ensure tools is a dictionary
+tools_dict = {tool.name: tool for tool in tools} 
+
+# Initialize WebSearchManager
+web_search_manager = WebSearchManager()
+
 # Create instances of your components
 document_handler = DocumentHandler(document_folder="/Users/lenox27/LENOX/uploaded_documents", data_folder="data")
 prompt_engine_config = PromptEngineConfig(context_length=10, max_tokens=4096)
-prompt_engine = PromptEngine(config=prompt_engine_config, tools={tool.name: tool for tool in tools})
+prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools_dict)  # Pass tools_dict here
 
 # Initialize Lenox with all necessary components
 lenox = Lenox(tools=tools, document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key)
@@ -165,6 +172,7 @@ def handle_query():
         app.logger.error(f"Error processing request: {str(e)}")
         return jsonify({'error': 'Failed to process request.'}), 500
 
+
 @app.route('/feedback', methods=['POST'])
 def handle_feedback():
     feedback_data = request.get_json()
@@ -180,14 +188,7 @@ def handle_feedback():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/search', methods=['POST'])
-def search():
-    query = request.json.get('query')
-    if not query:
-        return jsonify({'error': 'Empty query.'}), 400
-    search_results = lenox.web_search_manager.run_search(query)
-    app.logger.debug(f"Search results: {search_results}")
-    return jsonify({'type': 'search_results', 'results': search_results})
+
 
 @app.route('/create_visualization', methods=['POST'])
 def create_visualization():
