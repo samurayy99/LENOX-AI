@@ -9,12 +9,9 @@ from documents.documents import DocumentHandler
 from lenox import Lenox  # Ensure this imports the updated lenox.py
 from prompts import PromptEngine, PromptEngineConfig
 from werkzeug.utils import secure_filename
-from tool_imports import tools
+from tool_imports import import_tools
 import whisper
 from dashboards.dashboard import create_dashboard
-import logging
-from tool_imports import tools
-from router import IntentRouter
 
 # Load environment variables
 load_dotenv()
@@ -35,20 +32,16 @@ handler = RotatingFileHandler('app.log', maxBytes=10000, backupCount=1)
 handler.setLevel(logging.DEBUG)
 app.logger.addHandler(handler)
 
-# Initialize the IntentRouter
-intent_router = IntentRouter()
+# Import tools before they are used
+tools = import_tools()
 
 # Create instances of your components
 document_handler = DocumentHandler(document_folder="/Users/lenox27/LENOX/uploaded_documents", data_folder="data")
-prompt_engine_config = PromptEngineConfig(context_length=5, max_tokens=4096)
-
-
+prompt_engine_config = PromptEngineConfig(context_length=10, max_tokens=4096)
 prompt_engine = PromptEngine(config=prompt_engine_config, tools={tool.name: tool for tool in tools})
-# Ensure tools are passed as a list of functions
-lenox = Lenox(document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key, tools=tools, intent_router=intent_router)
 
-
-
+# Initialize Lenox with all necessary components
+lenox = Lenox(tools=tools, document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key)
 
 @app.route('/dashboard')
 def dashboard_page():
@@ -155,7 +148,6 @@ def synthesize_speech():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/query', methods=['POST'])
 def handle_query():
     try:
@@ -164,20 +156,14 @@ def handle_query():
 
         if not query:
             app.logger.debug("No query provided in the request.")
-            return jsonify({'type': 'error', 'content': 'Empty query.'}), 400
+            return jsonify({'error': 'Empty query.'}), 400
 
         result = lenox.convchain(query, session['session_id'])
-
-        if 'type' not in result:
-            result['type'] = 'text'
-            result = {'type': 'text', 'content': result}
-
         app.logger.debug(f"Processed query with convchain, result: {result}")
         return jsonify(result)
     except Exception as e:
         app.logger.error(f"Error processing request: {str(e)}")
-        return jsonify({'type': 'error', 'content': 'Failed to process request.'}), 500    
-    
+        return jsonify({'error': 'Failed to process request.'}), 500
 
 @app.route('/feedback', methods=['POST'])
 def handle_feedback():

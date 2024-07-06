@@ -3,14 +3,11 @@ from typing import Dict, List, Any
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, BaseMessage, SystemMessage
 from web_search import WebSearchManager
-from router import IntentRouter
+
 
 # Set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
-
-# Initialize the IntentRouter
-intent_router = IntentRouter()
 
 class PromptEngineConfig:
     def __init__(self, context_length: int = 10, max_tokens: int = 4096):
@@ -21,25 +18,18 @@ class PromptEngine:
     def __init__(self, config: PromptEngineConfig, tools: Dict[str, Any] = {}):
         self.config = config
         self.tools = tools
-        self.intent_router = intent_router
         self.web_search_manager = WebSearchManager()
         self.chat_model = self.initialize_chat_model()
         self.system_prompt = SystemMessage(content=system_prompt_content)
 
     def initialize_chat_model(self) -> ChatOpenAI:
         return ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.7)
-
-    # Modify the handle_query method
+    
     def handle_query(self, user_query: str, context_messages: List[str]) -> Dict[str, Any]:
         logger.debug(f"Handling query: {user_query}")
         logger.debug(f"Context messages: {context_messages}")
 
-        detected_intents = self.intent_router.detect_intent(user_query)
-        logger.debug(f"Detected intents: {detected_intents}")
-
-        response = self.intent_router.route_query(user_query)
-        if not response:
-            response = self.fetch_response_from_model(user_query, context_messages)
+        response = self.fetch_response_from_model(user_query, context_messages)
 
         logger.debug(f"Final response structure: {response}")
 
