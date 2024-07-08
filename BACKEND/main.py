@@ -14,6 +14,7 @@ import whisper
 from dashboards.dashboard import create_dashboard
 from web_search import WebSearchManager
 
+
 # Load environment variables
 load_dotenv()
 app = Flask(__name__)
@@ -79,7 +80,8 @@ def gpt_research():
     if not query:
         return jsonify({'error': 'Empty query.'}), 400
 
-    result = lenox.handle_gpt_research_query(query, report_type, report_source)
+    # Corrected call to handle_gpt_research
+    result = lenox.intent_detector.handle_gpt_research(user_query=query, report_type=report_type, report_source=report_source)
     return jsonify(result)
 
 
@@ -90,7 +92,7 @@ def search():
     if not query:
         return jsonify({'error': 'Empty query.'}), 400
 
-    result = lenox.web_search_manager.run_search(query)  # Ensure it uses lenox instance's web_search_manager
+    result = lenox.intent_detector.web_search_manager.run_search(query)  # Ensure it uses lenox instance's web_search_manager
     return jsonify(result)
 
 

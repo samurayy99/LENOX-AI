@@ -12,9 +12,6 @@ from langchain_openai import OpenAIEmbeddings  # Updated import
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 from tavily import TavilyClient
-from gpt_researcher import GPTResearcher  # Import GPT Researcher
-import asyncio
-from langchain.tools import tool
 
 
 
@@ -67,7 +64,6 @@ def get_retriever():
     return tavily_retriever
 
 
-
 class WebSearchManager:
     def __init__(self):
         # Set up the agent
@@ -94,12 +90,6 @@ class WebSearchManager:
         logging.basicConfig(level=logging.DEBUG)
         self.logger = logging.getLogger(__name__)
 
-    async def run_gpt_researcher(self, query: str, report_type: str, report_source: str) -> str:
-        researcher = GPTResearcher(query=query, report_type=report_type, report_source=report_source)
-        await researcher.conduct_research()
-        report = await researcher.write_report()
-        return report
-
     def run_search(self, query: str) -> dict:
         try:
             response = self.agent_chain.run({"input": query})
@@ -108,41 +98,3 @@ class WebSearchManager:
         except Exception as e:
             self.logger.error(f"Error using Tavily: {str(e)}")
             return {"type": "text", "content": f"Error using Tavily: {str(e)}"}
-
-    def run_gpt_research(self, query: str, report_type: str = "research_report", report_source: str = "web") -> dict:
-        try:
-            response = asyncio.run(self.run_gpt_researcher(query, report_type, report_source))
-            self.logger.debug(f"GPT Researcher response: {response}")
-            return {"type": "text", "content": response}
-        except Exception as e:
-            self.logger.error(f"Error using GPT Researcher: {str(e)}")
-            return {"type": "text", "content": f"Error using GPT Researcher: {str(e)}"}
-        
-        
-
-
-@tool
-def gpt_research_tool(query: str, report_type: str = "research_report", report_source: str = "web") -> dict:
-    """
-    Uses GPT Researcher to conduct research based on the provided query, report type, and report source.
-    """
-    web_search_manager = WebSearchManager()
-    return web_search_manager.run_gpt_research(query, report_type, report_source)
-
-
-
-if __name__ == "__main__":
-    # Example usage of the gpt_research_tool function
-    query = "Research the latest advancements in AI and provide a detailed report in APA format including sources."
-    report_type = "custom_report"
-    report_source = "web"
-
-    # Create an instance of WebSearchManager
-    web_search_manager = WebSearchManager()
-
-    # Run the GPT Researcher tool
-    result = web_search_manager.run_gpt_research(query=query, report_type=report_type, report_source=report_source)
-    
-    # Print the result
-    print("GPT Researcher Report:")
-    print(result)
