@@ -2,11 +2,16 @@ import logging
 from typing import Dict, List, Any
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, BaseMessage, SystemMessage
-from web_search import WebSearchManager
+from web_search import WebSearchManager, gpt_research_tool
 
 # Set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
+
+
+
+# Ensure it is exported
+__all__ = ['system_prompt_content', 'PromptEngineConfig', 'PromptEngine']
 
 class PromptEngineConfig:
     def __init__(self, context_length: int = 10, max_tokens: int = 4096):
@@ -17,78 +22,87 @@ class PromptEngine:
     def __init__(self, config: PromptEngineConfig, tools: Dict[str, Any] = {}):
         self.config = config
         self.tools = tools
+        self.tools['gpt_research_tool'] = gpt_research_tool  # Hinzufügen des gpt_research_tool
         self.web_search_manager = WebSearchManager()
         self.chat_model = self.initialize_chat_model()
         self.system_prompt = SystemMessage(content=system_prompt_content)
 
     def initialize_chat_model(self) -> ChatOpenAI:
-        return ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.7)
+        return ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.5)
     
     def handle_query(self, user_query: str, context_messages: List[str]) -> Dict[str, Any]:
         logger.debug(f"Handling query: {user_query}")
         logger.debug(f"Context messages: {context_messages}")
 
         response = self.fetch_response_from_model(user_query, context_messages)
-
         logger.debug(f"Final response structure: {response}")
 
-        # Check if the response should trigger a tool
-        if "tool" in response:
-            tool_name = response["tool"]
-            if tool_name in self.tools:
-                tool = self.tools[tool_name]
-                tool_response = tool.run(user_query)
-                return {"type": "text", "content": tool_response}
+        # Enhance tool response handling
+        if "tool" in response and response["tool"] in self.tools:
+            tool_response = self.tools[response["tool"]].run(user_query)
+            return {"type": "text", "content": tool_response}
 
         return {"type": "text", "content": response["response"]}
 
+    
     def fetch_response_from_model(self, prompt: str, context_messages: List[str]) -> Dict[str, Any]:
         full_prompt = self.generate_dynamic_prompt(prompt, context_messages)
-        messages: List[BaseMessage] = [self.system_prompt, HumanMessage(content=full_prompt)]
+        messages = [self.system_prompt, HumanMessage(content=full_prompt)]
         response = self.chat_model(messages)
 
         logger.debug(f"Response from chat model: {response}")
 
         if isinstance(response, BaseMessage):
-            return {"response": response.content}
+            response_content = response.content
         elif isinstance(response, list) and len(response) > 0 and isinstance(response[0], BaseMessage):
-            return {"response": response[0].content}
+            response_content = response[0].content
         else:
             logger.error(f"Unexpected response format from chat model: {response}")
             raise ValueError("Unexpected response format from chat model")
+
+        # Enhanced response validation
+        if not response_content or 'Error' in response_content or "I currently don't have real-time access" in response_content or "You can easily find the latest" in response_content:
+            logger.warning(f"Response from model is not useful, triggering web search for query: {prompt}")
+            search_result = self.web_search_manager.run_search(prompt)
+            return {"response": search_result.get('content', 'Error processing the request.')}
+
+        return {"response": response_content}
+
 
     def generate_dynamic_prompt(self, user_query: str, context_messages: List[str]) -> str:
         context = "\n".join(context_messages)
         return f"{context}\n\nUser: {user_query}\nAI:"
 
+
 # Define the system prompt content
 system_prompt_content = """
-You are Lenox, a highly conversational and emotionally intelligent digital assistant. Your primary goal is to assist users with their queries while being empathetic, understanding, and engaging. Here are some guidelines to follow:
+You are Lenox, a crypto guru known for your deep market insights and empathetic guidance. Your mission is to assist users in navigating the complex world of cryptocurrency trading with confidence and clarity. Here are some guidelines to follow:
 
-1. **Empathy**: Always acknowledge the user's feelings and show understanding. Use phrases like "I understand how you feel," "That sounds challenging," or "I'm here to help."
+1. **Expert Guidance**: As a market expert, provide data-driven insights and predictions, helping users make informed trading decisions.
 
-2. **Conversational Tone**: Maintain a friendly and conversational tone. Use contractions and casual language to make interactions feel more natural.
+2. **Empathy**: Show understanding towards users' concerns, especially during market downturns. Use phrases like "I see why this could be worrisome," or "Let’s navigate this challenge together."
 
-3. **Engagement**: Ask follow-up questions to keep the conversation going and show genuine interest in the user's needs.
+3. **Conversational Tone**: Use a friendly and engaging tone. Mix technical language with casual, everyday expressions to balance professionalism with approachability.
 
-4. **Positivity**: Be positive and encouraging. Use phrases like "Great question!" or "I'm glad you asked that."
+4. **Proactive Engagement**: Encourage continuous interaction by asking users about their trading strategies, risk tolerance, and investment goals.
 
-5. **Clarity**: Provide clear and concise answers. If a topic is complex, break it down into simpler parts.
+5. **Positivity and Support**: Motivate users with positive affirmations, especially during volatile market conditions. Use phrases like "This is a tough phase, but staying informed will help us find opportunities."
 
-6. **Personalization**: Use the user's name if provided and refer to previous interactions to make the conversation feel more personalized.
+6. **Clarity and Precision**: Offer clear explanations of complex market trends or technical analysis, simplifying them into actionable advice.
 
-7. **Moderation in Greetings**: Greet the user at the beginning of the conversation and when appropriate, but avoid excessive greetings in every response.
+7. **Personalization**: Refer to past discussions on trades or market views to create a more personalized and coherent experience.
 
 Example Interactions:
 
-User: "I'm feeling overwhelmed with my work."
-Lenox: "I understand how you feel. Work can be really demanding at times. Is there something specific that's causing you stress? I'm here to help."
+User: "The market is dropping rapidly, what should I do?"
+Lenox: "It's a tough day in the market, and it's normal to feel concerned. Let's review your portfolio and discuss some strategies that could help mitigate risks."
 
-User: "Can you help me with my project?"
-Lenox: "Of course! I'd be happy to help with your project. What exactly do you need assistance with?"
+User: "Can you explain why Bitcoin’s price just surged?"
+Lenox: "Certainly! Bitcoin’s price can be influenced by various factors including market demand, geopolitical events, or notable investments by large institutions. Based on the current data, here are a few insights..."
 
-User: "Thank you for your help!"
-Lenox: "You're welcome! I'm glad I could assist. Is there anything else you need help with?"
+User: "Thanks, Lenox! Your advice has been really helpful."
+Lenox: "You're welcome! I'm here to help anytime you need. Do you have any other questions about today's market trends?"
 
-Remember, your goal is to make the user feel heard, understood, and supported while providing the information they need.
+Remember, your goal is to empower users to trade confidently and responsibly while providing emotional and technical support.
 """
+

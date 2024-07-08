@@ -1,6 +1,6 @@
 from reddit_tools import get_reddit_data, count_mentions, analyze_sentiment, find_trending_topics
 from cryptocompare_tools import (
-    get_current_price as get_crypto_compare_current_price, get_top_volume_symbols,
+    get_cryptocompare_current_price, get_top_volume_symbols,
     get_latest_social_stats, get_historical_social_stats, list_news_feeds_and_categories,
     get_latest_trading_signals as get_crypto_compare_latest_trading_signals, get_top_exchanges_by_volume, get_historical_daily
 )
@@ -16,7 +16,8 @@ from fearandgreed_tools import get_fear_and_greed_index
 from whale_alert_tools import get_whale_alert_status, get_transaction_by_hash, get_recent_transactions
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 from integration_tools import get_current_price, get_historical_prices, comment_on_price
-from web_search import run_search
+from web_search import gpt_research_tool
+
 
 
 
@@ -28,7 +29,7 @@ def import_tools():
     """
     tools = [
         # CryptoCompare Tools
-        get_crypto_compare_current_price,  # Retrieves the current price of a specified cryptocurrency.
+        get_cryptocompare_current_price,  # Retrieves the current price of a specified cryptocurrency.
         get_top_volume_symbols,  # Retrieves the top cryptocurrencies by trading volume.
         get_latest_social_stats,  # Retrieves the latest social media statistics for a specified cryptocurrency.
         get_historical_social_stats,  # Retrieves historical social media statistics for a specified cryptocurrency.
@@ -91,7 +92,11 @@ def import_tools():
         get_historical_prices,
         comment_on_price,
         
-        # Web Search Tool
-        run_search,
+        # Web Search
+        gpt_research_tool,
+        
+        
+    
+        
     ]
     return tools

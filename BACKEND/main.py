@@ -68,6 +68,34 @@ def log_response(response):
 def index():
     return render_template('index.html')
 
+
+@app.route('/gpt_research', methods=['POST'])
+def gpt_research():
+    data = request.get_json()
+    query = data.get('query', '')
+    report_type = data.get('report_type', 'research_report')
+    report_source = data.get('report_source', 'web')
+    
+    if not query:
+        return jsonify({'error': 'Empty query.'}), 400
+
+    result = lenox.handle_gpt_research_query(query, report_type, report_source)
+    return jsonify(result)
+
+
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.get_json()
+    query = data.get('query', '')
+    if not query:
+        return jsonify({'error': 'Empty query.'}), 400
+
+    result = lenox.web_search_manager.run_search(query)  # Ensure it uses lenox instance's web_search_manager
+    return jsonify(result)
+
+
+
+
 @app.route('/audio/<filename>')
 def serve_audio(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -154,6 +182,7 @@ def synthesize_speech():
             return jsonify({'error': 'Failed to generate audio'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/query', methods=['POST'])
 def handle_query():

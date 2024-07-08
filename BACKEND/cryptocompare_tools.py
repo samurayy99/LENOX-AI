@@ -8,11 +8,15 @@ class APIError(Exception):
     def __init__(self, status_code, detail):
         super().__init__(f"API Error {status_code}: {detail}")
 
+
 @tool
-def get_current_price(symbol: str, currencies: str = 'USD') -> str:
+def get_cryptocompare_current_price(symbol: str, currencies: str = 'USD') -> str:
     """Fetches the current price of a specified cryptocurrency in one or more currencies."""
     api_key = os.getenv('CRYPTOCOMPARE_API_KEY')
-    headers = {'authorization': f'Apikey {api_key}'} if api_key else {}
+    if not api_key:
+        return "API key not found. Please set the CRYPTOCOMPARE_API_KEY environment variable."
+    
+    headers = {'authorization': f'Apikey {api_key}'}
     url = f"https://min-api.cryptocompare.com/data/price?fsym={symbol}&tsyms={currencies}"
     try:
         response = requests.get(url, headers=headers)
@@ -20,6 +24,7 @@ def get_current_price(symbol: str, currencies: str = 'USD') -> str:
         return f"Current prices for {symbol}: {response.json()}"
     except requests.RequestException as e:
         raise APIError(response.status_code, str(e))
+
 
 @tool
 def get_latest_social_stats(coin_symbol: str) -> str:
