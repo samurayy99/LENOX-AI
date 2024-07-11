@@ -1,7 +1,6 @@
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-import pandas as pd
 
 # Example evaluate_sarimax function implementation
 def evaluate_sarimax():
@@ -56,7 +55,7 @@ class Sarimax:
         test_x = np.array(test_x.iloc[:, 1:], dtype=float)
         test_x = self.sc_in.transform(test_x)
         self.test_size = test_x.shape[0]
-        pred_y = self.result.predict(start=self.train_size, end=self.train_size + self.test_size - 1, exog=test_x)
+        pred_y = self.result.get_forecast(steps=self.test_size, exog=test_x).predicted_mean
         pred_y = pred_y.reshape(-1, 1)
         pred_y = self.sc_out.inverse_transform(pred_y)
         return pred_y

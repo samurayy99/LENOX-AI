@@ -1,17 +1,29 @@
-import praw
-from collections import Counter
-from textblob import TextBlob
-from langchain.agents import tool  # Use the @tool decorator
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import os
+from collections import Counter
 from typing import List
+import string
+
+import praw
+from textblob import TextBlob
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-import string
-from praw.models import MoreComments  # Add this import
-
+from praw.models import MoreComments
+import spacy
 from dotenv import load_dotenv
+from nltk import download as nltk_download
+
+from langchain.agents import tool  # Use the @tool decorator
+
+# Load environment variables
 load_dotenv()
+
+# Download necessary NLTK data
+nltk_download('punkt')
+nltk_download('stopwords')
+
+# Load SpaCy model
+nlp = spacy.load("en_core_web_sm")
 
 # Initialize Reddit API with credentials from environment variables
 reddit = praw.Reddit(
@@ -20,17 +32,18 @@ reddit = praw.Reddit(
     user_agent=os.getenv('REDDIT_USER_AGENT')
 )
 
+# Known cryptocurrencies
+known_cryptos = {"bitcoin", "ethereum", "litecoin", "ripple", "dogecoin", "cardano", "polkadot", "binance", "solana", "chainlink"}
+
 @tool
 def get_reddit_data(subreddit: str, category: str = 'hot') -> str:
     """
     Fetches and returns the latest posts from a specified subreddit category using PRAW.
     """
     sub = reddit.subreddit(subreddit)
-    posts = getattr(sub, category)(limit=5)
+    posts = getattr(sub, category)(limit=10)  # Increase the limit to fetch more data
     posts_str = "\n\n".join([f"[Title: {post.title}]({post.url})" for post in posts])
     return f"Latest posts from r/{subreddit}:\n{posts_str}"
-
-
 
 @tool
 def count_mentions(subreddit: str, keyword: str, time_filter='week') -> str:
@@ -40,7 +53,6 @@ def count_mentions(subreddit: str, keyword: str, time_filter='week') -> str:
     mentions = sum(1 for _ in reddit.subreddit(subreddit).search(keyword, time_filter=time_filter))
     return f"'{keyword}' was mentioned {mentions} times in r/{subreddit} over the past {time_filter}."
 
-
 @tool
 def analyze_sentiment(subreddit: str, keyword: str, time_filter='week') -> str:
     """
@@ -48,6 +60,7 @@ def analyze_sentiment(subreddit: str, keyword: str, time_filter='week') -> str:
     """
     sentiment_analyzer = SentimentIntensityAnalyzer()
     sentiment_scores = []
+
     for submission in reddit.subreddit(subreddit).search(keyword, time_filter=time_filter):
         # Using TextBlob
         analysis_tb = TextBlob(submission.title)
@@ -58,7 +71,7 @@ def analyze_sentiment(subreddit: str, keyword: str, time_filter='week') -> str:
         sentiment_scores.append(analysis_vader['compound'])
         
         for comment in submission.comments.list():
-            if isinstance(comment, MoreComments):  # Use the imported MoreComments
+            if isinstance(comment, MoreComments):
                 continue
             analysis_tb = TextBlob(comment.body)
             sentiment_scores.append(analysis_tb.sentiment.polarity)
@@ -73,36 +86,40 @@ def analyze_sentiment(subreddit: str, keyword: str, time_filter='week') -> str:
         average_sentiment = 0
         sentiment_description = "No sentiment data available."
 
-    return f"Average sentiment for '{keyword}' in r/{subreddit} over the past {time_filter}: {average_sentiment:.2f} ({sentiment_description})"
-
+    return f"Average sentiment for '{keyword}' in r/{subreddit} over the past {time_filter}: {average_sentiment:.2f}. Interpretation: {sentiment_description}"
 
 def interpret_sentiment(score: float) -> str:
     """
     Provides a qualitative interpretation of a sentiment score.
     """
     if score > 0.05:
-        return "mostly positive"
+        return "The sentiment is mostly positive. People are generally upbeat and optimistic about this topic."
     elif score < -0.05:
-        return "mostly negative"
+        return "The sentiment is mostly negative. There seems to be a lot of concern and dissatisfaction surrounding this topic."
     else:
-        return "neutral"
-
+        return "The sentiment is neutral. There are mixed feelings about this topic, with no strong lean towards positive or negative."
 
 @tool
-def find_trending_topics(subreddits: List[str], time_filter='day') -> str:
+def find_trending_cryptos(subreddits: List[str], time_filter='day') -> str:
     """
-    Identifies trending topics in the given subreddits within the specified time period.
+    Identifies trending cryptocurrencies and new coins in the given subreddits within the specified time period.
     """
     topics = Counter()
-    stopwords_set = set(stopwords.words('english'))  # Ensure stopwords are being used to filter
+    new_coins = set()
+    stopwords_set = set(stopwords.words('english'))
+
     for subreddit in subreddits:
-        for submission in reddit.subreddit(subreddit).hot(limit=100):
-            words = [word for word in submission.title.split() if word.lower() not in stopwords_set]
+        for submission in reddit.subreddit(subreddit).hot(limit=500):
+            doc = nlp(submission.title)
+            words = [token.text.lower() for token in doc if token.text.lower() not in stopwords_set and token.is_alpha]
             topics.update(words)
+            new_coins.update(word for word in words if word.lower() not in known_cryptos and word.isalpha())
+    
     most_common_topics = topics.most_common(10)
     topics_str = "\n".join([f"{topic[0]}: {topic[1]} mentions" for topic in most_common_topics])
-    return f"Trending topics:\n{topics_str}"
+    new_coins_str = ", ".join(new_coins)
 
+    return f"Trending topics:\n{topics_str}\n\nPotential new coins being discussed: {new_coins_str}"
 
 def clean_reddit_text(docs: List[str]) -> List[str]:
     """

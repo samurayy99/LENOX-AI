@@ -6,8 +6,26 @@ from typing import Any, Dict, List, Tuple
 from .utilities import fetch_cryptocurrency_data, fetch_historical_data, calculate_rsi, arima_forecast, calculate_correlation
 
 
-def register_callbacks(dash_app):
-    """Register all callbacks for the Dash application."""
+# dashboards/callbacks.py
+
+def register_callbacks(app):
+    # Define your callbacks here
+    pass
+
+def get_predictions(model_name, data, timeframe):
+    if model_name == 'arima':
+        from predictive_models.arima import evaluate_arima
+        return evaluate_arima(data, steps=30)
+    # Add logic for other models like SARIMAX, Random Forest, LSTM
+    # elif model_name == 'sarimax':
+    #     from predictive_models.sarimax import evaluate_sarimax
+    #     return evaluate_sarimax(data, steps=30)
+    # elif model_name == 'random_forest':
+    #     from predictive_models.random_forest import evaluate_random_forest
+    #     return evaluate_random_forest(data, steps=30)
+    else:
+        raise ValueError("Unknown model")
+
     
     # Callback to switch between tabs and render the appropriate content
     @dash_app.callback(
@@ -194,6 +212,7 @@ def register_callbacks(dash_app):
         return fig
 
 
+
     # Predictive analytics chart using ARIMA forecasting and anomaly detection
     @dash_app.callback(
         Output('predictive-forecast-chart', 'figure'),
@@ -205,7 +224,7 @@ def register_callbacks(dash_app):
         forecast_prices = arima_forecast(data['Price'])
         forecast_fig = go.Figure()
         forecast_fig.add_trace(go.Scatter(x=data['Date'], y=data['Price'], mode='lines', name=f'{crypto.capitalize()} Price'))
-        future_dates = pd.date_range(start=data['Date'].iloc[-1], periods=len(forecast_prices) + 1, closed='right').date
+        future_dates = pd.date_range(start=data['Date'].iloc[-1], periods=len(forecast_prices) + 1, inclusive='right').date
         forecast_fig.add_trace(go.Scatter(x=future_dates, y=forecast_prices, mode='lines', name='ARIMA Forecast'))
         forecast_fig.update_layout(title=f'{crypto.capitalize()} Price Forecast (ARIMA)', xaxis_title='Date', yaxis_title='Price (USD)', template='plotly_dark')
 

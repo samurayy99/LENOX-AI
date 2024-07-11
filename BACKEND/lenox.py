@@ -1,6 +1,5 @@
 import sqlite3
-from typing import Dict, List, Union, Any
-from visualize_data import VisualizationConfig, create_visualization
+from typing import Dict, List, Union, Optional
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -12,11 +11,18 @@ from langchain.agents.format_scratchpad import format_to_openai_functions
 from lenox_memory import SQLChatMessageHistory
 from web_search import WebSearchManager
 import requests
-import json
 from gpt_research_tools import GPTResearchManager
 from intent_detection import IntentDetector
 # Import system prompt content from prompts.py
 from prompts import system_prompt_content, PromptEngineConfig, PromptEngine
+from langchain.schema import HumanMessage, AIMessage
+import logging  # Use built-in logging module
+from code_interpreter import generate_visualization_response_sync  # Import the function
+
+
+# Initialize logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 # Initialize WebSearchManager
@@ -43,15 +49,7 @@ class Lenox:
         self.chain = self.setup_chain()
         self.qa = AgentExecutor(agent=self.chain, tools=tools, verbose=False)
 
-    def configure_prompts(self):
-        """Configure the prompt template."""
-        return ChatPromptTemplate.from_messages([
-            ("system", system_prompt_content),
-            ("user", "Hi Lenox!"),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("user", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
+    
 
     def setup_chain(self):
         """Set up the agent chain."""
@@ -64,10 +62,34 @@ class Lenox:
             | OpenAIFunctionsAgentOutputParser()
         )
 
+    
+
+
+
+
+    def configure_prompts(self, context_messages: Optional[List[str]] = None, user_query: str = ""):
+        """Configure the prompt template with dynamic context."""
+        # Filter out non-string elements from context_messages
+        if context_messages:
+            context_messages = [msg for msg in context_messages if isinstance(msg, str)]
+        
+        context = "\n".join(context_messages) if context_messages else ""
+        full_prompt = f"{context}\n\nUser: {user_query}\nAI:"
+        logger.debug(f"Configuring prompt with context: {context} and user query: {user_query}")
+        return ChatPromptTemplate.from_messages([
+            ("system", system_prompt_content),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("user", full_prompt),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+
+    
     def convchain(self, query: str, session_id: str = "my_session") -> dict:
         """Process a user query."""
         if not query:
             return {"type": "text", "content": "Please enter a query."}
+
+        logger.debug(f"Received query: {query}")
 
         # Detect intent and handle it using the IntentDetector
         detected_intent = self.intent_detector.detect_intent(query)
@@ -75,6 +97,12 @@ class Lenox:
             # If the detected intent has a specific handler, use it
             response = self.intent_detector.handle_intent(detected_intent, query)
             output = response.get('content', 'Error processing the request.')
+            response_type = response.get('type', 'text')
+        elif self.is_visualization_query(query):
+            # Handle visualization queries
+            response = self.handle_visualization_query(query)
+            output = response.get('content', 'Error processing the request.')
+            response_type = response.get('type', 'visualization')
         else:
             # General conversational handling
             self.memory.session_id = session_id
@@ -82,17 +110,26 @@ class Lenox:
             self.memory.add_message(new_message)
             chat_history = self.memory.messages()
 
+            logger.debug(f"Chat history: {chat_history}")
+
+            # Ensure chat_history is a list of strings
+            chat_history_contents = [msg.content for msg in chat_history if isinstance(msg.content, str)]
+            self.prompt = self.configure_prompts(context_messages=chat_history_contents, user_query=query)
             result = self.qa.invoke({"input": query, "chat_history": chat_history})
             output = result.get('output', 'Error processing the request.')
+            response_type = 'text'
+
+        logger.debug(f"Generated output: {output}")
 
         # Ensure output is a string
         if not isinstance(output, str):
             output = str(output)
 
         self.memory.add_message(AIMessage(content=output))
-        return {"type": "text", "content": output}
+        return {"type": response_type, "content": output}
 
-
+   
+   
     def is_visualization_query(self, query: str) -> bool:
         """Identify visualization-based queries."""
         visualization_keywords = ["visualize", "graph", "chart", "plot", "show me a graph of", "display data"]
@@ -119,22 +156,19 @@ class Lenox:
         else:
             return {'x': [1, 2, 3, 4], 'y': [10, 11, 12, 13]}
 
-    def handle_visualization_query(self, query: str, session_id: str) -> Dict[str, Any]:
-        """
-        Handle visualization-related queries.
-        """
-        vis_type = self.parse_visualization_type(query)
-        data = self.fetch_data_for_visualization(query)
-        if not data:
-            return {"type": "error", "content": "Data for visualization could not be fetched."}
-        
-        # Ensure the data type matches the expected type
-        visualization_data = {key: [float(value) if isinstance(value, int) else value for value in values] 
-                              for key, values in data.items()}
+    def handle_visualization_query(self, query: str) -> dict:
+        try:
+            img_base64 = generate_visualization_response_sync(query)
+            if img_base64:
+                return {"type": "visualization", "content": img_base64}
+            else:
+                return {"type": "error", "content": "Failed to generate visualization."}
+        except Exception as e:
+            logger.error(f"Error in handle_visualization_query: {str(e)}")
+            return {"type": "error", "content": "An error occurred while generating visualization."}
 
-        visualization_config = VisualizationConfig(data=visualization_data, visualization_type=vis_type)
-        visualization_json = create_visualization(visualization_config)
-        return {"type": "visualization", "content": json.loads(visualization_json)}
+        
+        
 
     def handle_document_query(self, query: str) -> str:
         """Query the document index."""

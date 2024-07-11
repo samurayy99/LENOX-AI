@@ -1,14 +1,9 @@
 import logging
-
 import math
 import numpy as np
 import sklearn.metrics
-# import precision_score, \
-#     recall_score, confusion_matrix, classification_report, \
-#     accuracy_score, f1_score
 
 logger = logging.getLogger(__name__)
-
 
 def preprocess(pred, target, is_regression=False):
     if is_regression:
@@ -20,79 +15,73 @@ def preprocess(pred, target, is_regression=False):
             y_test.append(m1 > 0)
             prediction.append(m2 > 0)
         return y_test, prediction
-
     return target, pred
-
 
 def accuracy_score(pred, target, is_regression=False):
     y_test, prediction = preprocess(pred, target, is_regression)
     ac = sklearn.metrics.accuracy_score(y_test, prediction)
     return ac
 
-
 def f1_score(pred, target, is_regression=False):
     y_test, prediction = preprocess(pred, target, is_regression)
     f1 = sklearn.metrics.f1_score(y_test, prediction)
     return f1
-
 
 def recall_score(pred, target, is_regression=False):
     y_test, prediction = preprocess(pred, target, is_regression)
     rec = sklearn.metrics.recall_score(y_test, prediction)
     return rec
 
-
 def precision_score(pred, target, is_regression=False):
     y_test, prediction = preprocess(pred, target, is_regression)
     prec = sklearn.metrics.precision_score(y_test, prediction)
     return prec
-
 
 def classification_report(pred, target, is_regression=False):
     y_test, prediction = preprocess(pred, target, is_regression)
     cls = sklearn.metrics.classification_report(y_test, prediction)
     return cls
 
-
 def confusion_matrix(pred, target, is_regression=False):
     y_test, prediction = preprocess(pred, target, is_regression)
     conf = sklearn.metrics.confusion_matrix(y_test, prediction)
     return conf
 
-
 def rmse(pred, target, is_regression=False):
-    rmse = math.sqrt(np.square(np.subtract(pred, target)).mean())
-    # print('\n RMSE:', "{:.2f}".format(rmse))
-    return rmse
-
+    """Calculate Root Mean Square Error."""
+    if is_regression:
+        return math.sqrt(np.mean((np.array(pred) - np.array(target)) ** 2))
+    return math.sqrt(np.mean((np.array(pred) - np.array(target)) ** 2))
 
 def mae(pred, target, is_regression=False):
-    mae = np.absolute(pred-target).mean()
-    # print('\n MAE:', "{:.2f}".format(mae))
-    return mae
-
+    """Calculate Mean Absolute Error."""
+    if is_regression:
+        return np.mean(np.abs(np.array(pred) - np.array(target)))
+    return np.mean(np.abs(np.array(pred) - np.array(target)))
 
 def mape(pred, target, is_regression=False):
-    mape = np.mean(np.abs((pred - target)/target)) * 100
-    return mape
-
+    """Calculate Mean Absolute Percentage Error."""
+    if is_regression:
+        return np.mean(np.abs((np.array(target) - np.array(pred)) / np.array(target))) * 100
+    return np.mean(np.abs((np.array(target) - np.array(pred)) / np.array(target))) * 100
 
 def smape(pred, target, is_regression=False):
-    smape = np.mean(2 * np.abs(pred - target) / (np.abs(target) + np.abs(pred))) * 100
-    return smape
-
+    """Calculate Symmetric Mean Absolute Percentage Error."""
+    if is_regression:
+        return 100 * np.mean(np.abs(np.array(pred) - np.array(target)) / ((np.abs(np.array(pred)) + np.abs(np.array(target))) / 2))
+    return 100 * np.mean(np.abs(np.array(pred) - np.array(target)) / ((np.abs(np.array(pred)) + np.abs(np.array(target))) / 2))
 
 def mase(pred, target, sp=365, is_regression=False):
+    """Calculate Mean Absolute Scaled Error."""
     y_pred_naive = target[:-sp]
     mae_naive = np.mean(np.abs(target[sp:] - y_pred_naive))
-
     if mae_naive == 0:
         return np.nan
     else:
         return np.mean(np.abs(target - pred)) / mae_naive
 
-
-def msle(pred, target, squared=True,is_regression=False):
+def msle(pred, target, squared=True, is_regression=False):
+    """Calculate Mean Squared Logarithmic Error."""
     if squared:
         return np.mean(np.power(np.log(np.array(pred).astype(float) + 1) - np.log(np.array(target).astype(float) + 1), 2))
     return np.sqrt(np.mean(np.power(np.log(np.array(pred).astype(float) + 1) - np.log(np.array(target).astype(float) + 1), 2)))

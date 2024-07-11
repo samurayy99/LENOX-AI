@@ -14,7 +14,7 @@
 <body>
   <div class="chat-container">
     <div class="chat-header">
-      <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Lenox Chat Logo" class="chat-logo">
+      <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Lenox Chat Logo" class="chat-logo">
       <h2>Lenox Chat & Dashboard</h2>
       <!-- Separate Dashboard Access Button -->
       <div class="dashboard-button-container">
@@ -40,7 +40,7 @@
       </div>
     </div>
     <div id="chat-messages" class="chat-messages"></div>
-    <div id="visualization" class="visualization"></div>
+    <div id="visualization" class="visualization-placeholder bot-message"></div>
     <div class="chat-input-container">
       <textarea id="query" class="chat-input" placeholder="Ask Lenox something..." autofocus></textarea>
       <button id="sendButton">Send</button>
@@ -59,7 +59,7 @@
   </div>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
   <div id="loadingIndicator" class="loading-indicator" style="display: none;">
-    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Loading...">
+    <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Loading...">
   </div>
 </body>
 

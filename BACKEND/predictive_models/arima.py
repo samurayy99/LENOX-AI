@@ -1,16 +1,28 @@
-from statsmodels.tsa.arima.model import ARIMA  # Correct import statement for ARIMA
+from statsmodels.tsa.arima.model import ARIMA
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+from statsmodels.tsa.stattools import adfuller
 import pandas as pd
 
-def evaluate_arima():
+def make_stationary(data):
+    """Make the time series data stationary."""
+    result = adfuller(data)
+    if result[1] > 0.05:  # p-value > 0.05 indicates non-stationarity
+        return data.diff().dropna()  # Differencing
+    return data
+
+def evaluate_arima(data, steps=30):
     """Evaluate ARIMA model predictions for a dataset."""
-    data = [112, 118, 132, 129, 121, 135, 148, 148, 136, 119, 104, 118, 115, 126, 141, 135, 125, 149]
-    model = ARIMA(data, order=(5, 1, 0))
+    data = make_stationary(data)
+    model = ARIMA(data, order=(5, 1, 2))  # Adjusted parameters
     model_fit = model.fit()
-    predictions = model_fit.forecast(steps=5)
-    targets = data[-5:]
-    return predictions, targets
+    predictions = model_fit.forecast(steps=steps)
+    
+    # Inverse transformation to get back to the original scale
+    last_value = data.iloc[-1]
+    predictions = predictions.cumsum() + last_value
+    
+    return predictions
 
 class MyARIMA:
     sc_in = MinMaxScaler(feature_range=(0, 1))
@@ -31,6 +43,7 @@ class MyARIMA:
         train_y = self.sc_out.fit_transform(train_y)
         train_x = np.array(train_x, dtype=float)
         train_y = np.array(train_y, dtype=float)
+        train_y = make_stationary(pd.Series(train_y.flatten()))
         self.model = ARIMA(train_y, exog=train_x, order=self.order)
         self.result = self.model.fit()
 

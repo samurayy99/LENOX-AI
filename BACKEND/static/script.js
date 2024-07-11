@@ -59,6 +59,7 @@ document.getElementById('query').addEventListener('keydown', async (e) => {
     }
 });
 
+
 async function submitQuery() {
     const queryInput = document.getElementById('query');
     const query = queryInput.value.trim();
@@ -88,6 +89,51 @@ async function submitQuery() {
     }
     showLoadingIndicator(false);
 }
+
+
+
+function processResponseData(data) {
+    console.log("Received data from server:", data);
+    try {
+        switch (data.type) {
+            case 'visualization':
+                // Ensure content is parsed correctly
+                const content = JSON.parse(data.content.replace(/'/g, '"'));
+                appendMessage(content.message, 'bot-message');
+                break;
+            case 'text':
+                if (typeof data.content === 'string') {
+                    appendMessage(convertUrlsToLinks(data.content), 'bot-message', true);
+                } else if (typeof data.content === 'object' && 'response' in data.content) {
+                    appendMessage(convertUrlsToLinks(data.content.response), 'bot-message', true);
+                } else {
+                    throw new Error('Invalid text response structure.');
+                }
+                break;
+            case 'document_response':
+                if (Array.isArray(data.content)) {
+                    data.content.forEach(doc => {
+                        appendMessage(`**Filename:** ${doc.metadata.filename}<br>**Content:** ${doc.page_content}`, 'bot-message');
+                    });
+                } else {
+                    throw new Error('Invalid document_response structure.');
+                }
+                break;
+            case 'error':
+                console.error('Error response received:', data.content);
+                appendMessage(data.content, 'error-message');
+                break;
+            default:
+                console.error('Unexpected response type:', data.type);
+                appendMessage('Received unexpected type of data from the server.', 'error-message');
+                break;
+        }
+    } catch (error) {
+        console.error('Error processing response:', error);
+        appendMessage(`Error processing response: ${error.message}`, 'error-message');
+    }
+}
+
 
 document.getElementById('uploadForm').addEventListener('submit', function (event) {
     event.preventDefault(); // Prevent the default form submission
@@ -203,12 +249,19 @@ function fetchAudio(text) {
     });
 }
 
+
+
 function handleVisualResponse(data) {
     const visualizationContainer = appendVisualizationPlaceholder();
     if (data.content && visualizationContainer) {
         try {
-            console.log('Visualization data:', data.content);
-            Plotly.newPlot(visualizationContainer, data.content.data, data.content.layout);
+            console.log('Visualization data:', data.content.image);
+            const imgElement = document.createElement('img');
+            imgElement.src = `data:image/png;base64,${data.content.image}`;
+            visualizationContainer.appendChild(imgElement);
+
+            // Append the textual response
+            appendMessage(data.content.text, 'bot-message');
         } catch (e) {
             console.error('Error rendering visualization:', e);
             appendMessage('An error occurred while rendering the visualization.', 'error-message');
@@ -233,7 +286,8 @@ function processResponseData(data) {
     try {
         switch (data.type) {
             case 'visualization':
-                handleVisualResponse(data);
+                // No need to parse content as JSON, it's already an object
+                appendMessage(data.content.message, 'bot-message');
                 break;
             case 'text':
                 if (typeof data.content === 'string') {
@@ -267,6 +321,7 @@ function processResponseData(data) {
         appendMessage(`Error processing response: ${error.message}`, 'error-message');
     }
 }
+
 
 
 

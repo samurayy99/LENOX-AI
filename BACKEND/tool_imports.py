@@ -1,4 +1,4 @@
-from reddit_tools import get_reddit_data, count_mentions, analyze_sentiment, find_trending_topics
+from reddit_tools import get_reddit_data, count_mentions, analyze_sentiment, find_trending_cryptos
 from cryptocompare_tools import (
     get_cryptocompare_current_price, get_top_volume_symbols,
     get_latest_social_stats, get_historical_social_stats, list_news_feeds_and_categories,
@@ -52,7 +52,7 @@ def import_tools():
         get_reddit_data,  # Retrieves data from Reddit for a specified cryptocurrency.
         count_mentions,  # Counts the number of mentions of a specified cryptocurrency on Reddit.
         analyze_sentiment,  # Analyzes sentiment of Reddit posts for a specified cryptocurrency.
-        find_trending_topics,  # Finds trending topics related to cryptocurrencies on Reddit.
+        find_trending_cryptos,  # Finds trending cryptocurrencies and new coins being discussed on Reddit.
 
         # YouTube Tools
         search_youtube,  # Searches YouTube for videos related to a specified cryptocurrency.

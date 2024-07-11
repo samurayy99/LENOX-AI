@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 from statsmodels.tsa.arima.model import ARIMA
 
+
 def fetch_cryptocurrency_data(retries=3, delay=5):
     """Fetch live cryptocurrency data from CoinGecko with retries and delay on rate limit errors."""
     url = ("https://api.coingecko.com/api/v3/simple/price"
@@ -40,6 +41,7 @@ def fetch_cryptocurrency_data(retries=3, delay=5):
     # If all retries fail, return an empty DataFrame or raise an error
     print("Unable to fetch cryptocurrency data after retries.")
     return pd.DataFrame(columns=['Symbol', 'Price (USD)', 'Volume (24h)', 'Market Cap (USD)', 'Change (24h %)'])
+
 
 def fetch_historical_data(symbols, days=30):
     """Fetch historical price data for a list of cryptocurrencies over a specified number of days."""

@@ -11,13 +11,16 @@ from prompts import PromptEngine, PromptEngineConfig
 from werkzeug.utils import secure_filename
 from tool_imports import import_tools
 import whisper
+import json
 from dashboards.dashboard import create_dashboard
 from web_search import WebSearchManager
+from code_interpreter import generate_visualization_response_sync
 
 
 # Load environment variables
 load_dotenv()
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'static/images'
 whisper_model = whisper.load_model("base")  # Rename the Whisper model for clarity
 openai_api_key = os.getenv('OPENAI_API_KEY')
 CORS(app)
@@ -50,6 +53,7 @@ prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools_dict)  # P
 
 # Initialize Lenox with all necessary components
 lenox = Lenox(tools=tools, document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key)
+
 
 @app.route('/dashboard')
 def dashboard_page():
@@ -186,6 +190,8 @@ def synthesize_speech():
         return jsonify({'error': str(e)}), 500
 
 
+
+
 @app.route('/query', methods=['POST'])
 def handle_query():
     try:
@@ -196,8 +202,17 @@ def handle_query():
             app.logger.debug("No query provided in the request.")
             return jsonify({'error': 'Empty query.'}), 400
 
+        app.logger.debug("Starting to process query with convchain.")
         result = lenox.convchain(query, session['session_id'])
         app.logger.debug(f"Processed query with convchain, result: {result}")
+
+        # Ensure the content field is a JSON object only for visualization responses
+        if result['type'] == 'visualization':
+            # Replace single quotes with double quotes
+            app.logger.debug("Parsing visualization content")
+            result['content'] = json.loads(result['content'].replace("'", '"'))
+
+        app.logger.debug("Sending response back to client.")
         return jsonify(result)
     except Exception as e:
         app.logger.error(f"Error processing request: {str(e)}")
@@ -220,21 +235,26 @@ def handle_feedback():
         return jsonify({'error': str(e)}), 500
 
 
-
 @app.route('/create_visualization', methods=['POST'])
 def create_visualization():
+    data = request.get_json()
+    query = data.get('query', '').strip()
+
+    if not query:
+        app.logger.error("No query provided for visualization.")
+        return jsonify({"status": "error", "error": "No query provided."}), 400
+
     try:
-        data = request.get_json()
-        visualization_result = lenox.handle_visualization_query(data['query'], session.get('session_id', 'default_session'))
-        
-        # Ensure proper formatting for the UI
-        if visualization_result['type'] == 'visualization':
-            return jsonify({"status": "success", "data": visualization_result['content']})
-        else:
-            return jsonify({"status": "error", "message": visualization_result['content']}), 400
+        app.logger.debug(f"Received query for visualization: {query}")
+        result = generate_visualization_response_sync(query)
+        app.logger.debug(f"Generated visualization result: {result}")
+        return jsonify(result)
+    except ValueError as e:
+        app.logger.error(f"Error generating visualization: {str(e)}")
+        return jsonify({"status": "error", "error": str(e)}), 500
     except Exception as e:
-        app.logger.error(f"Failed to create visualization: {str(e)}")
-        return jsonify({'error': 'Failed to process visualization.'}), 500
+        app.logger.error(f"Unexpected error: {str(e)}")
+        return jsonify({"status": "error", "error": "An unexpected error occurred."}), 500
 
 @socketio.on('connect')
 def on_connect():
