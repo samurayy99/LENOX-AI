@@ -41,6 +41,7 @@ def fetch_cryptocurrency_data(retries=3, delay=5):
     print("Unable to fetch cryptocurrency data after retries.")
     return pd.DataFrame(columns=['Symbol', 'Price (USD)', 'Volume (24h)', 'Market Cap (USD)', 'Change (24h %)'])
 
+
 def fetch_historical_data(symbols, days=30):
     """Fetch historical price data for a list of cryptocurrencies over a specified number of days."""
     historical_data = {}
@@ -53,11 +54,11 @@ def fetch_historical_data(symbols, days=30):
             if 'prices' in data:
                 prices = pd.DataFrame(data['prices'], columns=['Timestamp', 'Price'])
                 prices['Date'] = pd.to_datetime(prices['Timestamp'], unit='ms').dt.date
-                historical_data[symbol] = prices
+                historical_data[symbol] = prices.set_index('Date')['Price']
         except requests.RequestException as e:
             print(f"Failed to fetch historical data for {symbol}: {str(e)}")
             # Return an empty DataFrame with the same structure to avoid KeyError
-            historical_data[symbol] = pd.DataFrame(columns=['Timestamp', 'Price', 'Date'])
+            historical_data[symbol] = pd.DataFrame(columns=['Price'])
     return historical_data
 
 

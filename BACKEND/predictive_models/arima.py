@@ -11,17 +11,18 @@ def make_stationary(data):
         return data.diff().dropna()  # Differencing
     return data
 
+
 def evaluate_arima(data, steps=30):
     """Evaluate ARIMA model predictions for a dataset."""
     data = make_stationary(data)
     model = ARIMA(data, order=(5, 1, 2))  # Adjusted parameters
     model_fit = model.fit()
     predictions = model_fit.forecast(steps=steps)
-    
+
     # Inverse transformation to get back to the original scale
     last_value = data.iloc[-1]
     predictions = predictions.cumsum() + last_value
-    
+
     return predictions
 
 class MyARIMA:

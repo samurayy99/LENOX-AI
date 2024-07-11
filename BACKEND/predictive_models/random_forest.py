@@ -1,13 +1,38 @@
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
+import pandas as pd
 import numpy as np
 
-# Example evaluate_randomforest function implementation
+def preprocess_data(data):
+    """Preprocess the input data, including handling missing values and scaling features."""
+    # Convert datetime features to numerical format
+    for col in data.select_dtypes(include=['datetime', 'datetime64']).columns:
+        data[col] = data[col].map(pd.Timestamp.toordinal)
+    
+    # Drop the Date column if it exists
+    if 'Date' in data.columns:
+        data = data.drop(columns=['Date'])
+    
+    # Impute missing values
+    imputer = SimpleImputer(missing_values=np.nan, strategy="mean")
+    data = pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
+    
+    return data
+
 def evaluate_random_forest(data, target, test_size=0.2, n_estimators=100, random_state=42):
     """Evaluate Random Forest model predictions for a dataset."""
+    data = preprocess_data(data)
+    
     # Split the dataset into training and test sets
-    split_index = int((1 - test_size) * len(target))
-    train_features, test_features = data[:split_index], data[split_index:]
-    train_target, test_target = target[:split_index], target[split_index:]
+    train_features, test_features, train_target, test_target = train_test_split(data, target, test_size=test_size, random_state=random_state)
+
+    # Scale the features
+    scaler = StandardScaler()
+    train_features = scaler.fit_transform(train_features)
+    test_features = scaler.transform(test_features)
 
     # Fit the Random Forest model
     model = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state)
@@ -15,43 +40,30 @@ def evaluate_random_forest(data, target, test_size=0.2, n_estimators=100, random
 
     # Make predictions
     predictions = model.predict(test_features)
-
-    return predictions, test_target
+    # Calculate r2 score
+    score = r2_score(test_target, predictions)
+    return predictions, score
 
 class RandomForest:
     def __init__(self, args):
-        """
-        Initialize the RandomForest model with the given arguments.
-        
-        Args:
-            args: An object containing the arguments n_estimators and random_state.
-        """
         self.n_estimators = args.n_estimators
         self.random_state = args.random_state
         self.model = RandomForestRegressor(n_estimators=self.n_estimators, random_state=self.random_state)
 
-    def fit(self, data_x):
-        """
-        Fit the RandomForest model to the training data.
+    def fit(self, data_x, data_y):
+        data_x = preprocess_data(data_x)
         
-        Args:
-            data_x: A 2D numpy array where the last column is the target variable.
-        """
-        data_x = np.array(data_x)
-        train_x = data_x[:, 1:-1]
-        train_y = data_x[:, -1]
-        self.model.fit(train_x, train_y)
+        # Scale the features
+        scaler = StandardScaler()
+        data_x = scaler.fit_transform(data_x)
+        
+        self.model.fit(data_x, data_y)
 
-    def predict(self, test_x):
-        """
-        Predict using the fitted RandomForest model.
+    def predict(self, data_x):
+        data_x = preprocess_data(data_x)
         
-        Args:
-            test_x: A DataFrame or 2D array containing the features for prediction.
+        # Scale the features
+        scaler = StandardScaler()
+        data_x = scaler.transform(data_x)
         
-        Returns:
-            pred_y: The predicted values.
-        """
-        test_x = np.array(test_x.iloc[:, 1:], dtype=float)
-        pred_y = self.model.predict(test_x)
-        return pred_y
+        return self.model.predict(data_x)

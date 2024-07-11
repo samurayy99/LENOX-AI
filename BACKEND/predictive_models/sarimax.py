@@ -1,24 +1,30 @@
-from statsmodels.tsa.statespace.sarimax import SARIMAX, SARIMAXResults
+from statsmodels.tsa.statespace.sarimax import SARIMAX, SARIMAXResultsWrapper
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 
-# Example evaluate_sarimax function implementation
 def evaluate_sarimax(data, steps=5, exog=None):
     """Evaluate SARIMAX model predictions for a dataset."""
     if exog is None:
         exog = np.random.random((len(data), 1))  # Example external factors (replace this with your actual exogenous data)
 
+    # Ensure data is in the correct format
+    data = np.array(data, dtype=float)
+    print(f"Data shape: {data.shape}, Exog shape: {exog.shape}")
+
     # Fit the SARIMAX model
     model = SARIMAX(data, exog=exog, order=(5, 1, 0), seasonal_order=(0, 0, 0, 0))
-    model_fit = model.fit()
+    model_fit = model.fit(disp=False)
+    print(f"Model fit type: {type(model_fit)}")
 
-    # Ensure model_fit is of type SARIMAXResults
-    if not isinstance(model_fit, SARIMAXResults):
-        raise TypeError("Expected model_fit to be of type SARIMAXResults")
+    # Ensure model_fit is of type SARIMAXResultsWrapper
+    if not isinstance(model_fit, SARIMAXResultsWrapper):
+        raise TypeError("Expected model_fit to be of type SARIMAXResultsWrapper")
 
     # Make predictions
     predictions = model_fit.get_forecast(steps=steps, exog=exog[-steps:]).predicted_mean
     return predictions
+
+
 
 class Sarimax:
     sc_in = MinMaxScaler(feature_range=(0, 1))
@@ -33,7 +39,7 @@ class Sarimax:
         self.enforce_stationarity = args.enforce_stationarity
 
     def fit(self, data_x):
-        data_x = np.array(data_x)
+        data_x = np.array(data_x, dtype=float)
         train_x = data_x[:, 1:-1]
         train_y = data_x[:, -1]
         self.train_size = train_x.shape[0]
@@ -50,13 +56,14 @@ class Sarimax:
             enforce_invertibility=self.enforce_invertibility,
             enforce_stationarity=self.enforce_stationarity
         )
-        result = self.model.fit()
+        result = self.model.fit(disp=False)
+        print(f"Model fit type: {type(result)}")
 
-        # Ensure result is of type SARIMAXResults
-        if not isinstance(result, SARIMAXResults):
-            raise TypeError("Expected result to be of type SARIMAXResults")
+        # Ensure result is of type SARIMAXResultsWrapper
+        if not isinstance(result, SARIMAXResultsWrapper):
+            raise TypeError("Expected result to be of type SARIMAXResultsWrapper")
 
-        self.result: SARIMAXResults = result
+        self.result: SARIMAXResultsWrapper = result
 
     def predict(self, test_x):
         test_x = np.array(test_x.iloc[:, 1:], dtype=float)
