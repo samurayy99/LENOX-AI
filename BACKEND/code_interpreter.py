@@ -1,8 +1,7 @@
+import asyncio
+import logging
 from codeinterpreterapi import CodeInterpreterSession
 from typing import Dict, Any
-import logging
-
-
 
 def execute_code_snippet(code_snippet: str, data: Dict[str, Any]) -> Dict:
     """Execute user-defined code snippet for data analysis."""
@@ -16,12 +15,11 @@ async def generate_visualization_response(query: str):
         response = await session.agenerate_response(query)
         return response
 
-
-def generate_visualization_response_sync(query: str):
-    """Generate visualization using code interpreter synchronously."""
+async def generate_visualization_response_async(query: str):
+    """Generate visualization using code interpreter asynchronously."""
     logging.debug("Starting CodeInterpreterSession for query: %s", query)
-    with CodeInterpreterSession() as session:
-        response = session.generate_response(query)
+    async with CodeInterpreterSession() as session:
+        response = await session.agenerate_response(query)
         logging.debug("Received response from CodeInterpreterSession")
 
         # Extracting the image data if it is available in the response
@@ -42,3 +40,7 @@ def generate_visualization_response_sync(query: str):
         else:
             logging.error("Response does not contain a plot figure.")
             raise ValueError("Response does not contain a plot figure.")
+
+def generate_visualization_response_sync(query: str):
+    """Wrapper to run async function in sync context."""
+    return asyncio.run(generate_visualization_response_async(query))

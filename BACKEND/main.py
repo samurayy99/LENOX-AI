@@ -16,7 +16,6 @@ from dashboards.dashboard import create_dashboard
 from web_search import WebSearchManager
 from code_interpreter import generate_visualization_response_sync
 
-
 # Load environment variables
 load_dotenv()
 app = Flask(__name__)
@@ -255,6 +254,8 @@ def create_visualization():
     except Exception as e:
         app.logger.error(f"Unexpected error: {str(e)}")
         return jsonify({"status": "error", "error": "An unexpected error occurred."}), 500
+
+
 
 @socketio.on('connect')
 def on_connect():
