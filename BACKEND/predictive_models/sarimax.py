@@ -1,23 +1,24 @@
-from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.statespace.sarimax import SARIMAX, SARIMAXResults
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 
 # Example evaluate_sarimax function implementation
-def evaluate_sarimax():
+def evaluate_sarimax(data, steps=5, exog=None):
     """Evaluate SARIMAX model predictions for a dataset."""
-    # Example dataset (replace this with your actual dataset)
-    data = [112, 118, 132, 129, 121, 135, 148, 148, 136, 119, 104, 118, 115, 126, 141, 135, 125, 149]
-    exog = np.random.random((len(data), 1))  # Example external factors (replace this with your actual exogenous data)
+    if exog is None:
+        exog = np.random.random((len(data), 1))  # Example external factors (replace this with your actual exogenous data)
 
     # Fit the SARIMAX model
     model = SARIMAX(data, exog=exog, order=(5, 1, 0), seasonal_order=(0, 0, 0, 0))
     model_fit = model.fit()
 
-    # Make predictions
-    predictions = model_fit.forecast(steps=5, exog=exog[-5:])
-    targets = data[-5:]
+    # Ensure model_fit is of type SARIMAXResults
+    if not isinstance(model_fit, SARIMAXResults):
+        raise TypeError("Expected model_fit to be of type SARIMAXResults")
 
-    return predictions, targets
+    # Make predictions
+    predictions = model_fit.get_forecast(steps=steps, exog=exog[-steps:]).predicted_mean
+    return predictions
 
 class Sarimax:
     sc_in = MinMaxScaler(feature_range=(0, 1))
@@ -49,13 +50,20 @@ class Sarimax:
             enforce_invertibility=self.enforce_invertibility,
             enforce_stationarity=self.enforce_stationarity
         )
-        self.result = self.model.fit()
+        result = self.model.fit()
+
+        # Ensure result is of type SARIMAXResults
+        if not isinstance(result, SARIMAXResults):
+            raise TypeError("Expected result to be of type SARIMAXResults")
+
+        self.result: SARIMAXResults = result
 
     def predict(self, test_x):
         test_x = np.array(test_x.iloc[:, 1:], dtype=float)
         test_x = self.sc_in.transform(test_x)
         self.test_size = test_x.shape[0]
-        pred_y = self.result.get_forecast(steps=self.test_size, exog=test_x).predicted_mean
+        forecast_result = self.result.get_forecast(steps=self.test_size, exog=test_x)
+        pred_y = forecast_result.predicted_mean
         pred_y = pred_y.reshape(-1, 1)
         pred_y = self.sc_out.inverse_transform(pred_y)
         return pred_y

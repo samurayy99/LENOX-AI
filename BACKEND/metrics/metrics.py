@@ -6,6 +6,7 @@ import sklearn.metrics
 logger = logging.getLogger(__name__)
 
 def preprocess(pred, target, is_regression=False):
+    """Preprocess predictions and targets for classification metrics."""
     if is_regression:
         y_test = []
         prediction = []
@@ -18,69 +19,60 @@ def preprocess(pred, target, is_regression=False):
     return target, pred
 
 def accuracy_score(pred, target, is_regression=False):
+    """Calculate accuracy score."""
     y_test, prediction = preprocess(pred, target, is_regression)
-    ac = sklearn.metrics.accuracy_score(y_test, prediction)
-    return ac
+    return sklearn.metrics.accuracy_score(y_test, prediction)
 
 def f1_score(pred, target, is_regression=False):
+    """Calculate F1 score."""
     y_test, prediction = preprocess(pred, target, is_regression)
-    f1 = sklearn.metrics.f1_score(y_test, prediction)
-    return f1
+    return sklearn.metrics.f1_score(y_test, prediction)
 
 def recall_score(pred, target, is_regression=False):
+    """Calculate recall score."""
     y_test, prediction = preprocess(pred, target, is_regression)
-    rec = sklearn.metrics.recall_score(y_test, prediction)
-    return rec
+    return sklearn.metrics.recall_score(y_test, prediction)
 
 def precision_score(pred, target, is_regression=False):
+    """Calculate precision score."""
     y_test, prediction = preprocess(pred, target, is_regression)
-    prec = sklearn.metrics.precision_score(y_test, prediction)
-    return prec
+    return sklearn.metrics.precision_score(y_test, prediction)
 
 def classification_report(pred, target, is_regression=False):
+    """Generate classification report."""
     y_test, prediction = preprocess(pred, target, is_regression)
-    cls = sklearn.metrics.classification_report(y_test, prediction)
-    return cls
+    return sklearn.metrics.classification_report(y_test, prediction)
 
 def confusion_matrix(pred, target, is_regression=False):
+    """Generate confusion matrix."""
     y_test, prediction = preprocess(pred, target, is_regression)
-    conf = sklearn.metrics.confusion_matrix(y_test, prediction)
-    return conf
+    return sklearn.metrics.confusion_matrix(y_test, prediction)
 
-def rmse(pred, target, is_regression=False):
+def rmse(pred, target):
     """Calculate Root Mean Square Error."""
-    if is_regression:
-        return math.sqrt(np.mean((np.array(pred) - np.array(target)) ** 2))
     return math.sqrt(np.mean((np.array(pred) - np.array(target)) ** 2))
 
-def mae(pred, target, is_regression=False):
+def mae(pred, target):
     """Calculate Mean Absolute Error."""
-    if is_regression:
-        return np.mean(np.abs(np.array(pred) - np.array(target)))
     return np.mean(np.abs(np.array(pred) - np.array(target)))
 
-def mape(pred, target, is_regression=False):
+def mape(pred, target):
     """Calculate Mean Absolute Percentage Error."""
-    if is_regression:
-        return np.mean(np.abs((np.array(target) - np.array(pred)) / np.array(target))) * 100
     return np.mean(np.abs((np.array(target) - np.array(pred)) / np.array(target))) * 100
 
-def smape(pred, target, is_regression=False):
+def smape(pred, target):
     """Calculate Symmetric Mean Absolute Percentage Error."""
-    if is_regression:
-        return 100 * np.mean(np.abs(np.array(pred) - np.array(target)) / ((np.abs(np.array(pred)) + np.abs(np.array(target))) / 2))
     return 100 * np.mean(np.abs(np.array(pred) - np.array(target)) / ((np.abs(np.array(pred)) + np.abs(np.array(target))) / 2))
 
-def mase(pred, target, sp=365, is_regression=False):
+def mase(pred, target, sp=365):
     """Calculate Mean Absolute Scaled Error."""
     y_pred_naive = target[:-sp]
     mae_naive = np.mean(np.abs(target[sp:] - y_pred_naive))
     if mae_naive == 0:
         return np.nan
-    else:
-        return np.mean(np.abs(target - pred)) / mae_naive
+    return np.mean(np.abs(target - pred)) / mae_naive
 
-def msle(pred, target, squared=True, is_regression=False):
+def msle(pred, target, squared=True):
     """Calculate Mean Squared Logarithmic Error."""
     if squared:
         return np.mean(np.power(np.log(np.array(pred).astype(float) + 1) - np.log(np.array(target).astype(float) + 1), 2))

@@ -1,7 +1,6 @@
 import time
 import requests
 import pandas as pd
-import logging
 from statsmodels.tsa.arima.model import ARIMA
 
 
@@ -14,7 +13,7 @@ def fetch_cryptocurrency_data(retries=3, delay=5):
            "&include_24hr_vol=true"
            "&include_24hr_change=true")
     
-    for attempt in range(retries):
+    for _ in range(retries):  # Use underscore to indicate the variable is intentionally unused
         response = requests.get(url)
         
         # Check for HTTP 429 (Too Many Requests)
@@ -42,7 +41,6 @@ def fetch_cryptocurrency_data(retries=3, delay=5):
     print("Unable to fetch cryptocurrency data after retries.")
     return pd.DataFrame(columns=['Symbol', 'Price (USD)', 'Volume (24h)', 'Market Cap (USD)', 'Change (24h %)'])
 
-
 def fetch_historical_data(symbols, days=30):
     """Fetch historical price data for a list of cryptocurrencies over a specified number of days."""
     historical_data = {}
@@ -57,7 +55,7 @@ def fetch_historical_data(symbols, days=30):
                 prices['Date'] = pd.to_datetime(prices['Timestamp'], unit='ms').dt.date
                 historical_data[symbol] = prices
         except requests.RequestException as e:
-            logging.error(f"Failed to fetch historical data for {symbol}: {str(e)}")
+            print(f"Failed to fetch historical data for {symbol}: {str(e)}")
             # Return an empty DataFrame with the same structure to avoid KeyError
             historical_data[symbol] = pd.DataFrame(columns=['Timestamp', 'Price', 'Date'])
     return historical_data
@@ -74,15 +72,10 @@ def calculate_rsi(prices, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
+
 def arima_forecast(prices, steps=30):
     """Predict future prices using ARIMA model."""
     model = ARIMA(prices, order=(5, 1, 0))
     model_fit = model.fit()
     forecast = model_fit.forecast(steps=steps)
     return forecast
-
-def calculate_correlation(cryptos, days=30):
-    """Fetch historical data and calculate the correlation between selected cryptocurrencies."""
-    historical_data = fetch_historical_data(cryptos, days)
-    prices_df = pd.DataFrame({symbol: df['Price'] for symbol, df in historical_data.items()})
-    return prices_df.corr()

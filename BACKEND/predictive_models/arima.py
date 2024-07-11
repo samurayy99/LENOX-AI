@@ -29,11 +29,23 @@ class MyARIMA:
     sc_out = MinMaxScaler(feature_range=(0, 1))
 
     def __init__(self, args):
+        """
+        Initialize the ARIMA model with the given arguments.
+        
+        Args:
+            args: An object containing the order of the ARIMA model.
+        """
         self.train_size = -1
         self.test_size = -1
         self.order = tuple(map(int, args.order.split(', ')))
 
     def fit(self, data_x):
+        """
+        Fit the ARIMA model to the training data.
+        
+        Args:
+            data_x: A 2D numpy array where the last column is the target variable.
+        """
         data_x = np.array(data_x)
         train_x = data_x[:, 1:-1]
         train_y = data_x[:, -1]
@@ -48,6 +60,15 @@ class MyARIMA:
         self.result = self.model.fit()
 
     def predict(self, test_x):
+        """
+        Predict using the fitted ARIMA model.
+        
+        Args:
+            test_x: A DataFrame or 2D array containing the features for prediction.
+        
+        Returns:
+            pred_y: The predicted values.
+        """
         test_x = np.array(test_x.iloc[:, 1:], dtype=float)
         test_x = self.sc_in.transform(test_x)
         self.test_size = test_x.shape[0]

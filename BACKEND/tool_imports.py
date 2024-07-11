@@ -93,7 +93,6 @@ def import_tools():
         get_historical_prices,
         comment_on_price,
         
-    
         
     ]
     return tools
