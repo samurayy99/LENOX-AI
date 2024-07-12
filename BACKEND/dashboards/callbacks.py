@@ -1,112 +1,264 @@
-from dash import Input, Output, dcc, html
+import os
+import time
 import pandas as pd
-import plotly.graph_objects as go
-from predictive_models.arima import evaluate_arima
-from predictive_models.random_forest import evaluate_random_forest
-from predictive_models.sarimax import evaluate_sarimax
-from .utilities import fetch_historical_data
+from datetime import datetime
 
-def register_callbacks(app):
-    @app.callback(
-        Output('tab-content', 'children'),
-        Input('tabs', 'value')
+from dash import Dash, no_update, ctx, Output, Input, State
+import dash_bootstrap_components as dbc
+from dash.exceptions import PreventUpdate
+
+from dashboards.market_data import update_market_data
+from dashboards.components.table_cards import get_row_highlight_condition
+from dashboards.components.figures import get_candlestick_figure, get_bar_figure
+from dashboards.utils import filter_df, add_emas
+
+
+def register_callbacks(app: Dash):
+
+    @app.long_callback(
+        Output("timestamp", "data"),
+        Input("update_button", "n_clicks"),
+        running=[
+            (Output("update_button", "disabled"), True, False),
+            (Output("update_button", "children"), [dbc.Spinner(size="sm"), " Updating..."], "Update Data"),
+        ]
     )
-    def render_tab_content(tab):
-        if tab == 'tab-arima':
-            return html.Div([
-                html.Label("Cryptocurrency"),
-                dcc.Dropdown(
-                    id='arima-crypto-dropdown',
-                    options=[
-                        {'label': 'Bitcoin (BTC)', 'value': 'bitcoin'},
-                        {'label': 'Ethereum (ETH)', 'value': 'ethereum'},
-                        {'label': 'Litecoin (LTC)', 'value': 'litecoin'},
-                        {'label': 'Binance Coin (BNB)', 'value': 'binancecoin'},
-                        {'label': 'Dogecoin (DOGE)', 'value': 'dogecoin'}
-                    ],
-                    value='bitcoin'
-                ),
-                dcc.Graph(id='arima-graph')
-            ])
-        elif tab == 'tab-randomforest':
-            return html.Div([
-                html.Label("Cryptocurrency"),
-                dcc.Dropdown(
-                    id='randomforest-crypto-dropdown',
-                    options=[
-                        {'label': 'Bitcoin (BTC)', 'value': 'bitcoin'},
-                        {'label': 'Ethereum (ETH)', 'value': 'ethereum'},
-                        {'label': 'Litecoin (LTC)', 'value': 'litecoin'},
-                        {'label': 'Binance Coin (BNB)', 'value': 'binancecoin'},
-                        {'label': 'Dogecoin (DOGE)', 'value': 'dogecoin'}
-                    ],
-                    value='bitcoin'
-                ),
-                dcc.Graph(id='randomforest-graph')
-            ])
-        elif tab == 'tab-sarimax':
-            return html.Div([
-                html.Label("Cryptocurrency"),
-                dcc.Dropdown(
-                    id='sarimax-crypto-dropdown',
-                    options=[
-                        {'label': 'Bitcoin (BTC)', 'value': 'bitcoin'},
-                        {'label': 'Ethereum (ETH)', 'value': 'ethereum'},
-                        {'label': 'Litecoin (LTC)', 'value': 'litecoin'},
-                        {'label': 'Binance Coin (BNB)', 'value': 'binancecoin'},
-                        {'label': 'Dogecoin (DOGE)', 'value': 'dogecoin'}
-                    ],
-                    value='bitcoin'
-                ),
-                dcc.Graph(id='sarimax-graph')
-            ])
+    def update_data(n_clicks):
+        """ 
+        Update all market data on startup or when the update button was clicked. 
+        Once the data is ready, the timestamp is updated, which triggers other callbacks.
+        """
+        timestamp = int(time.time())
+        update_market_data()
+        return timestamp
+
 
     @app.callback(
-        Output('arima-graph', 'figure'),
-        [Input('arima-crypto-dropdown', 'value')]
+        Output("last_update_text", "children"),
+        Input("timestamp", "data"),
+        prevent_initial_call=True,
     )
-    def update_arima_graph(selected_crypto):
-        historical_data = fetch_historical_data([selected_crypto], days=30)
-        prices = historical_data[selected_crypto]
-        predictions = evaluate_arima(prices, steps=30)
-        figure = go.Figure()
-        figure.add_trace(go.Scatter(x=prices.index, y=prices, mode='lines', name='Actual'))
-        forecast_dates = pd.date_range(start=prices.index[-1], periods=30, freq='D')
-        figure.add_trace(go.Scatter(x=forecast_dates, y=predictions, mode='lines', name='Predicted'))
-        figure.update_layout(title=f'{selected_crypto.capitalize()} Price Prediction using ARIMA', xaxis_title='Date', yaxis_title='Price')
-        return figure
+    def set_last_update_text(timestamp):
+        """ Display the time of the last update once the new data is available. """
+        return f"Last update: {datetime.fromtimestamp(timestamp).strftime('%d.%m.%Y, %H:%M')}"
+
+    
+    @app.callback(
+        Output("trend_table", "data"),
+        Input("timestamp", "data"),
+        Input("radio_trend", "value"),
+        prevent_initial_call=True,
+    )
+    def update_trend_table(timestamp, filter):
+        """ Update the data table of the uptrend screener whenever the data was updated or another filter was selected. """
+        df = pd.read_csv(os.path.join("data", "config.csv"), index_col="name")
+        df = df.drop(["BTC"]) # only keep altcoins
+        df["id"] = df.index
+        df = filter_df(df, filter)
+        df = df[["id", "trend_strength", "gain_1d", "gain_1w", "gain_1m"]]
+
+        return df.to_dict("records")
+
 
     @app.callback(
-        Output('randomforest-graph', 'figure'),
-        [Input('randomforest-crypto-dropdown', 'value')]
+        Output("pump_table", "data"),
+        Input("timestamp", "data"),
+        Input("radio_pump", "value"),
+        prevent_initial_call=True,
     )
-    def update_randomforest_graph(selected_crypto):
-        historical_data = fetch_historical_data([selected_crypto], days=30)
-        prices = historical_data[selected_crypto]
-        features = pd.DataFrame(prices).reset_index()
-        # Drop the datetime column if it exists, otherwise do nothing
-        if 'index' in features.columns:
-            features = features.drop(columns=['index'])
-        target = prices.values
-        predictions, _ = evaluate_random_forest(features, target)
-        figure = go.Figure()
-        figure.add_trace(go.Scatter(x=prices.index, y=target, mode='lines', name='Actual'))
-        forecast_dates = pd.date_range(start=prices.index[-1], periods=30, freq='D')
-        figure.add_trace(go.Scatter(x=forecast_dates, y=predictions, mode='lines', name='Predicted'))
-        figure.update_layout(title=f'{selected_crypto.capitalize()} Price Prediction using Random Forest', xaxis_title='Date', yaxis_title='Price')
-        return figure
+    def update_pump_table(timestamp, filter):
+        """ Update the data table of the pump screener whenever the data was updated or another filter was selected. """
+        df = pd.read_csv(os.path.join("data", "market_data.csv"), index_col="name")
+        df = df.drop(["BTC"]) # only keep altcoins
+        df["id"] = df.index
+        df = filter_df(df, filter)
+        df = df.loc[df["pump_strength"] > 2]
+        df = df[["id", "pump_strength", "gain_1d", "gain_1w", "gain_1m"]]   
+        df = df.sort_values(by=["pump_strength"], ascending=False)
+
+        return df.to_dict("records")
+
 
     @app.callback(
-        Output('sarimax-graph', 'figure'),
-        [Input('sarimax-crypto-dropdown', 'value')]
+        Output("trend_table", "page_current"),
+        Output("pump_table", "page_current"),
+        Input("timestamp", "data"),
+        Input("trend_table", "sort_by"),
     )
-    def update_sarimax_graph(selected_crypto):
-        historical_data = fetch_historical_data([selected_crypto], days=30)
-        prices = historical_data[selected_crypto]
-        predictions = evaluate_sarimax(prices, steps=30)
-        figure = go.Figure()
-        figure.add_trace(go.Scatter(x=prices.index, y=prices, mode='lines', name='Actual'))
-        forecast_dates = pd.date_range(start=prices.index[-1], periods=30, freq='D')
-        figure.add_trace(go.Scatter(x=forecast_dates, y=predictions, mode='lines', name='Predicted'))
-        figure.update_layout(title=f'{selected_crypto.capitalize()} Price Prediction using SARIMAX', xaxis_title='Date', yaxis_title='Price')
-        return figure
+    def reset_to_first_page(timestamp, sort_by):
+        """ 
+        Go to the first page of both data tables whenever the data was updated. 
+        Go to the first page of the uptrend data table whenever the user changes the sorting.
+        """
+        if ctx.triggered_id == "timestamp":
+            return 0, 0
+        return 0, no_update
+
+
+    @app.callback(
+        Output("altcoin", "data"),
+        Output("trend_table", "active_cell"), Output("trend_table", "selected_cells"), Output("trend_table", "style_data_conditional"),
+        Output("pump_table", "active_cell"), Output("pump_table", "selected_cells"), Output("pump_table", "style_data_conditional"),
+        Input("trend_table", "active_cell"),  Input("pump_table", "active_cell"), Input("timestamp", "data"),
+        Input("radio_trend", "value"),  Input("radio_pump", "value"),
+        State("trend_table", "style_data_conditional"), State("pump_table", "style_data_conditional"),
+        prevent_initial_call=True,
+    )
+    def select_altcoin(active_cell_trend, active_cell_pump, timestamp, filter_trend, filter_pump, style_trend, style_pump):
+        """ Highlight the table row of the currently selected altcoin. """
+        # remove highlighting when reloading or applying filters
+        if ctx.triggered_id in ["timestamp", "radio_trend", "radio_pump"]:
+            style_trend[1] = {}
+            style_pump[1] = {}
+            return no_update, None, [], style_trend, None, [], style_pump
+
+        altcoin = no_update
+        if ctx.triggered_id == "trend_table":
+            if active_cell_trend:
+                condition = get_row_highlight_condition(active_cell_trend["row"])
+                style_trend[1] = condition
+                style_pump[1] = {}
+                altcoin = active_cell_trend["row_id"]
+            else:
+                style_trend[1] = {}
+                style_pump = no_update
+        else:
+            if active_cell_pump:
+                condition = get_row_highlight_condition(active_cell_pump["row"])
+                style_pump[1] = condition
+                style_trend[1] = {}
+                altcoin = active_cell_pump["row_id"]
+            else:
+                style_pump[1] = {}
+                style_trend = no_update
+                
+        return altcoin, None, [], style_trend, None, [], style_pump
+
+    
+    @app.callback(
+        Output("bar_chart", "children"),
+        Input("timestamp", "data"),
+        Input("radio_overview_filter", "value"),
+        Input("radio_overview_timeframe", "value"),
+        prevent_initial_call=True,
+    )
+    def update_overview_card(timestamp, filter, timeframe):
+        """ 
+        Update the bar figure containing the top gainers whenever the data was updated 
+        or another filter or timeframe was selected. 
+        """
+        df = pd.read_csv(os.path.join("data", "market_data.csv"), index_col="name")
+        col = f"gain_{timeframe.lower()}"
+        btc_gain = df.loc["BTC", col]
+        df = df.drop(["BTC"]) # only keep altcoins
+        df = filter_df(df, filter)
+        df = df.sort_values(by=[col], ascending=False).iloc[:30]
+
+        return get_bar_figure(names=df.index, gains=df[col], btc_gain=btc_gain, timeframe=timeframe)
+        
+
+    @app.callback(
+        Output("bitcoin_chart", "children"),
+        Input("timestamp", "data"),
+        Input("radio_btc_chart", "value"),
+        prevent_initial_call=True,
+    )
+    def update_bitcoin_chart(timestamp, timeframe):
+        """ Update the Bitcoin chart whenever the data was updated or another timeframe was selected. """
+        klines = pd.read_csv(os.path.join("data", "klines", "BTC.csv"), index_col="timestamp")
+        klines = add_emas(klines=klines, ema_lengths=[12, 21, 50])
+
+        if timeframe == "1W":
+            klines = klines.iloc[-42:]
+        else:
+            klines = klines.iloc[-186:]
+
+        return get_candlestick_figure(title="BTC / USD", klines=klines)
+    
+
+    @app.callback(
+        Output("altcoin_usd_chart", "children"), 
+        Output("altcoin_btc_chart", "children"),
+        Input("timestamp", "data"),
+        Input("altcoin", "data"),
+        Input("radio_altcoin_chart", "value"), 
+        prevent_initial_call=True,
+    )
+    def update_altcoin_charts(timestamp, altcoin, timeframe):
+        """ Update both altcoin charts whenever the data was updated or another timeframe was selected. """
+        if altcoin in [None, ""]:
+            raise PreventUpdate
+        
+        btc_klines = pd.read_csv(os.path.join("data", "klines", "BTC.csv"), index_col="timestamp")
+        usd_denom_klines = pd.read_csv(os.path.join("data", "klines", f"{altcoin}.csv"), index_col="timestamp")
+        btc_denom_klines = pd.DataFrame(
+            index=usd_denom_klines.index,
+            data={
+                "open": usd_denom_klines["open"] / btc_klines["open"], 
+                "high": usd_denom_klines["high"] / btc_klines["close"],
+                "low": usd_denom_klines["low"] / btc_klines["close"], 
+                "close": usd_denom_klines["close"] / btc_klines["close"],
+            },
+        ).dropna()
+
+        usd_denom_klines = add_emas(klines=usd_denom_klines, ema_lengths=[12, 21, 50])
+        btc_denom_klines = add_emas(klines=btc_denom_klines, ema_lengths=[12, 21, 50])
+
+        if timeframe == "1W":
+            usd_denom_klines = usd_denom_klines.iloc[-42:]
+            btc_denom_klines = btc_denom_klines.iloc[-42:]
+        else:
+            usd_denom_klines = usd_denom_klines.iloc[-186:]
+            btc_denom_klines = btc_denom_klines.iloc[-186:]
+
+        usd_chart = get_candlestick_figure(title=f"{altcoin} / USD", klines=usd_denom_klines)
+        btc_chart = get_candlestick_figure(title=f"{altcoin} / BTC", klines=btc_denom_klines)
+
+        return usd_chart, btc_chart
+
+
+    @app.callback(
+        Output("bitcoin_tradingview", "children"),
+        Output("bitcoin_exchanges", "children"),
+        Input("timestamp", "data"),
+        prevent_initial_call=True,
+    )
+    def update_bitcoin_links(timestamp):
+        """ Update the TradingView and exchange links for Bitcoin whenever the data was updated. """
+        df = pd.read_csv(os.path.join("dashboards", "config.csv"), index_col="name")
+        tradingview_link = dbc.CardLink("TradingView", target="_blank", href=df.loc["BTC", "chart_usd"])
+        
+        exchange_links = []
+        if type(df.loc["BTC", "spot_usd"]) == str:
+            exchange_links.append(dbc.CardLink("Spot (USD)", target="_blank", href=df.loc["BTC", "spot_usd"]))
+        if type(df.loc["BTC", "perps"]) == str:
+            exchange_links.append(dbc.CardLink("Perpetuals", target="_blank", href=df.loc["BTC", "perps"]))
+
+        return tradingview_link, exchange_links
+
+
+    @app.callback(
+        Output("altcoin_tradingview", "children"),
+        Output("altcoin_exchanges", "children"),
+        Input("altcoin", "data"),
+        prevent_initial_call=True,
+    )
+    def update_altcoin_links(altcoin):
+        """ Update the TradingView and exchange links for the current altcoin whenever a new altcoin was selected. """
+        df = pd.read_csv(os.path.join("data", "config.csv"), index_col="name")
+
+        tradingview_links = []
+        if type(df.loc[altcoin, "chart_usd"]) == str:
+            tradingview_links.append(dbc.CardLink("TradingView (USD)", target="_blank", href=df.loc[altcoin, "chart_usd"]))
+        if type(df.loc[altcoin, "chart_btc"]) == str:
+            tradingview_links.append(dbc.CardLink("TradingView (BTC)", target="_blank", href=df.loc[altcoin, "chart_btc"]))
+
+        exchange_links = []
+        if type(df.loc[altcoin, "spot_usd"]) == str:
+            exchange_links.append(dbc.CardLink("Spot (USD)", target="_blank", href=df.loc[altcoin, "spot_usd"]))
+        if type(df.loc[altcoin, "spot_btc"]) == str:
+            exchange_links.append(dbc.CardLink("Spot (BTC)", target="_blank", href=df.loc[altcoin, "spot_btc"]))
+        if type(df.loc[altcoin, "perps"]) == str:
+            exchange_links.append(dbc.CardLink("Perpetuals", target="_blank", href=df.loc[altcoin, "perps"]))
+
+        return tradingview_links, exchange_links

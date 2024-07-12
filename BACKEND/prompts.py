@@ -3,6 +3,7 @@ from typing import Dict, Any
 from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage
 from web_search import WebSearchManager
+from gpt_research_tools import GPTResearchManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ class PromptEngine:
     def __init__(self, config: PromptEngineConfig, tools: Dict[str, Any] = {}):
         self.config = config
         self.tools = tools
+        self.gpt_research_manager = GPTResearchManager()
         self.web_search_manager = WebSearchManager()
         self.chat_model = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.7)
         self.system_prompt = SystemMessage(content=system_prompt_content)
