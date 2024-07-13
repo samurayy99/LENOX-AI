@@ -10,11 +10,14 @@ load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+
 class GPTResearchManager:
     async def run_gpt_researcher(self, query: str, report_type: str, report_source: str) -> str:
         researcher = GPTResearcher(query=query, report_type=report_type, report_source=report_source)
         await researcher.conduct_research()
         report = await researcher.write_report()
+        # Ensure URLs are correctly formatted
+        report = report.replace('href="', 'href="').replace('">', '" target="_blank">')
         return report
 
     def run_gpt_research(self, query: str, report_type: str = "research_report", report_source: str = "web") -> dict:
@@ -25,4 +28,3 @@ class GPTResearchManager:
         except Exception as e:
             logger.error(f"Error using GPT Researcher: {str(e)}")
             return {"type": "text", "content": f"Error using GPT Researcher: {str(e)}"}
-        

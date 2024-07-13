@@ -5,7 +5,6 @@ from requests.models import Response
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
 
-
 """
 API docs:
     - https://binance-docs.github.io/apidocs/spot/en/#kline-candlestick-data
@@ -30,7 +29,6 @@ INTERVALS = {
     "huobi": {5: "5min", 15: "15min", 60: "60min", 240: "4hour", 1440: "1day"},
     "kucoin": {5: "5min", 15: "15min", 60: "1hour", 240: "4hour", 1440: "1day"},
 }
-
 
 def get_klines(
     info_df: pd.DataFrame,
@@ -57,33 +55,33 @@ def get_klines(
     kline_dict = {}
     names = info_df.index.values
     for i in range(len(names)):
-        exchange = info_df.loc[names[i], "exchange"]
+        name = str(names[i])  # Ensure name is a string
+        exchange = info_df.loc[name, "exchange"]
         try:
             if exchange == "binance":
                 try:
-                    kline_dict[names[i]] = _get_binance_klines(responses[i])
+                    kline_dict[name] = _get_binance_klines(responses[i])
                 except:
                     # try perps endpoint in case there is no spot listing
                     params = {
-                        "symbol": info_df.loc[names[i], "symbol"],
+                        "symbol": info_df.loc[name, "symbol"],
                         "interval": INTERVALS[exchange][interval],
                         "limit": num_klines,
                     }
                     response = requests.get(BINANCE_PERPS_ENDPOINT, params=params)
-                    kline_dict[names[i]] = _get_binance_klines(response)
+                    kline_dict[name] = _get_binance_klines(response)
             elif exchange == "bybit":
-                kline_dict[names[i]] = _get_bybit_klines(responses[i])
+                kline_dict[name] = _get_bybit_klines(responses[i])
             elif exchange == "gateio":
-                kline_dict[names[i]] = _get_gateio_klines(responses[i])
+                kline_dict[name] = _get_gateio_klines(responses[i])
             elif exchange == "huobi":
-                kline_dict[names[i]] = _get_huobi_klines(responses[i])
+                kline_dict[name] = _get_huobi_klines(responses[i])
             elif exchange == "kucoin":
-                kline_dict[names[i]] = _get_kucoin_klines(responses[i])
+                kline_dict[name] = _get_kucoin_klines(responses[i])
         except:
-            print(f"Kline retrieval error! Name: {names[i]}, exchange: {exchange}")
+            print(f"Kline retrieval error! Name: {name}, exchange: {exchange}")
     
     return kline_dict
-
 
 def _get_all_responses(
     info_df: pd.DataFrame,
@@ -99,7 +97,6 @@ def _get_all_responses(
             for name in info_df.index
         ]
         return [future.result() for future in futures]
-
 
 def _get_response(
     name: str,
@@ -150,7 +147,6 @@ def _get_response(
     else:
         raise ValueError(f"Invalid exchange: {exchange}")
 
-
 def _get_binance_klines(response: Response) -> pd.DataFrame:
     """ 
     Return data frame with kline data given a response from the Binance API.
@@ -166,7 +162,6 @@ def _get_binance_klines(response: Response) -> pd.DataFrame:
         "low": [float(data[i][3]) for i in range(n)],
         "close": [float(data[i][4]) for i in range(n)],
     })
-
 
 def _get_bybit_klines(response: Response) -> pd.DataFrame:
     """ 

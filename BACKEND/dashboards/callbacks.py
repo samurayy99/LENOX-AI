@@ -2,6 +2,7 @@ import os
 import time
 import pandas as pd
 from datetime import datetime
+import logging
 
 from dash import Dash, no_update, ctx, Output, Input, State
 import dash_bootstrap_components as dbc
@@ -12,6 +13,9 @@ from dashboards.components.table_cards import get_row_highlight_condition
 from dashboards.components.figures import get_candlestick_figure, get_bar_figure
 from dashboards.utils import filter_df, add_emas
 
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def register_callbacks(app: Dash):
 
@@ -29,6 +33,7 @@ def register_callbacks(app: Dash):
         Once the data is ready, the timestamp is updated, which triggers other callbacks.
         """
         timestamp = int(time.time())
+        logger.debug(f"Updating market data at timestamp: {timestamp}")
         update_market_data()
         return timestamp
 
@@ -40,7 +45,9 @@ def register_callbacks(app: Dash):
     )
     def set_last_update_text(timestamp):
         """ Display the time of the last update once the new data is available. """
-        return f"Last update: {datetime.fromtimestamp(timestamp).strftime('%d.%m.%Y, %H:%M')}"
+        last_update_text = f"Last update: {datetime.fromtimestamp(timestamp).strftime('%d.%m.%Y, %H:%M')}"
+        logger.debug(f"Setting last update text: {last_update_text}")
+        return last_update_text
 
     
     @app.callback(
@@ -49,16 +56,39 @@ def register_callbacks(app: Dash):
         Input("radio_trend", "value"),
         prevent_initial_call=True,
     )
+    
     def update_trend_table(timestamp, filter):
         """ Update the data table of the uptrend screener whenever the data was updated or another filter was selected. """
-        df = pd.read_csv(os.path.join("data", "config.csv"), index_col="name")
-        df = df.drop(["BTC"]) # only keep altcoins
-        df["id"] = df.index
-        df = filter_df(df, filter)
-        df = df[["id", "trend_strength", "gain_1d", "gain_1w", "gain_1m"]]
+        try:
+            # Read the CSV file
+            df = pd.read_csv(os.path.join("data", "market_data.csv"), index_col="name")
+            logging.debug(f"DataFrame columns: {df.columns}")
 
-        return df.to_dict("records")
+            # Drop the BTC row and add an ID column
+            df = df.drop(["BTC"])
+            df["id"] = df.index
 
+            # Define the required columns
+            required_columns = ["id", "trend_strength", "gain_1d", "gain_1w", "gain_1m"]
+
+            # Check if the required columns exist
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                logging.error(f"Missing columns in market_data.csv: {missing_columns}")
+                return []
+
+            # Filter the DataFrame based on the selected filter
+            df = filter_df(df, filter)
+            logging.debug(f"Filtered DataFrame: {df.head()}")
+
+            # Select only the required columns
+            df = df[required_columns]
+            data = df.to_dict(orient="records")
+            logging.debug(f"Data to be returned: {data}")
+            return data
+        except Exception as e:
+            logging.error(f"Error in update_trend_table: {e}")
+            return []
 
     @app.callback(
         Output("pump_table", "data"),
@@ -68,14 +98,16 @@ def register_callbacks(app: Dash):
     )
     def update_pump_table(timestamp, filter):
         """ Update the data table of the pump screener whenever the data was updated or another filter was selected. """
+        logger.debug(f"Updating pump table with timestamp: {timestamp} and filter: {filter}")
         df = pd.read_csv(os.path.join("data", "market_data.csv"), index_col="name")
-        df = df.drop(["BTC"]) # only keep altcoins
+        logger.debug(f"Read {len(df)} rows from market_data.csv for pump table")
+        df = df.drop(["BTC"])  # only keep altcoins
         df["id"] = df.index
         df = filter_df(df, filter)
         df = df.loc[df["pump_strength"] > 2]
         df = df[["id", "pump_strength", "gain_1d", "gain_1w", "gain_1m"]]   
         df = df.sort_values(by=["pump_strength"], ascending=False)
-
+        logger.debug(f"Filtered pump table data: {df.head()}")
         return df.to_dict("records")
 
 
@@ -90,6 +122,7 @@ def register_callbacks(app: Dash):
         Go to the first page of both data tables whenever the data was updated. 
         Go to the first page of the uptrend data table whenever the user changes the sorting.
         """
+        logger.debug(f"Resetting to first page with timestamp: {timestamp}, sort_by: {sort_by}")
         if ctx.triggered_id == "timestamp":
             return 0, 0
         return 0, no_update
@@ -106,6 +139,7 @@ def register_callbacks(app: Dash):
     )
     def select_altcoin(active_cell_trend, active_cell_pump, timestamp, filter_trend, filter_pump, style_trend, style_pump):
         """ Highlight the table row of the currently selected altcoin. """
+        logger.debug(f"Selecting altcoin with active_cell_trend: {active_cell_trend}, active_cell_pump: {active_cell_pump}, timestamp: {timestamp}, filter_trend: {filter_trend}, filter_pump: {filter_pump}")
         # remove highlighting when reloading or applying filters
         if ctx.triggered_id in ["timestamp", "radio_trend", "radio_pump"]:
             style_trend[1] = {}
@@ -165,6 +199,7 @@ def register_callbacks(app: Dash):
     )
     def update_bitcoin_chart(timestamp, timeframe):
         """ Update the Bitcoin chart whenever the data was updated or another timeframe was selected. """
+        logger.debug(f"Updating bitcoin chart with timestamp: {timestamp}, timeframe: {timeframe}")
         klines = pd.read_csv(os.path.join("data", "klines", "BTC.csv"), index_col="timestamp")
         klines = add_emas(klines=klines, ema_lengths=[12, 21, 50])
 
@@ -186,6 +221,7 @@ def register_callbacks(app: Dash):
     )
     def update_altcoin_charts(timestamp, altcoin, timeframe):
         """ Update both altcoin charts whenever the data was updated or another timeframe was selected. """
+        logger.debug(f"Updating altcoin charts with timestamp: {timestamp}, altcoin: {altcoin}, timeframe: {timeframe}")
         if altcoin in [None, ""]:
             raise PreventUpdate
         
@@ -225,7 +261,8 @@ def register_callbacks(app: Dash):
     )
     def update_bitcoin_links(timestamp):
         """ Update the TradingView and exchange links for Bitcoin whenever the data was updated. """
-        df = pd.read_csv(os.path.join("dashboards", "config.csv"), index_col="name")
+        logger.debug(f"Updating bitcoin links with timestamp: {timestamp}")
+        df = pd.read_csv(os.path.join("data", "config.csv"), index_col="name")
         tradingview_link = dbc.CardLink("TradingView", target="_blank", href=df.loc["BTC", "chart_usd"])
         
         exchange_links = []
@@ -245,6 +282,7 @@ def register_callbacks(app: Dash):
     )
     def update_altcoin_links(altcoin):
         """ Update the TradingView and exchange links for the current altcoin whenever a new altcoin was selected. """
+        logger.debug(f"Updating altcoin links with altcoin: {altcoin}")
         df = pd.read_csv(os.path.join("data", "config.csv"), index_col="name")
 
         tradingview_links = []

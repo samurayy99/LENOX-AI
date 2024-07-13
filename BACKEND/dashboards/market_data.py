@@ -7,7 +7,6 @@ from typing import List, Dict
 from dashboards.exchange_data import get_klines
 from dashboards.utils import get_emas
 
-
 def update_market_data() -> None:
     """
     Update and save all market data values using the latest exchange data.
@@ -62,7 +61,6 @@ def _add_gains(
     
     return df
 
-
 def _add_trend_strengths(
     df: pd.DataFrame,
     kline_dict: Dict[str, pd.DataFrame],
@@ -80,8 +78,11 @@ def _add_trend_strengths(
         if time.time() - klines["timestamp"].iloc[-1] < 3600:
             klines = klines.iloc[:-1]
 
+        # ensure klines["close"] is a Series
+        close_prices = pd.Series(klines["close"])
+
         # compute strength of uptrend using EMA values
-        ema_12, ema_21, ema_50 = get_emas(close=klines["close"], ema_lengths=[12, 21, 50])
+        ema_12, ema_21, ema_50 = get_emas(close=close_prices, ema_lengths=[12, 21, 50])
         scores = np.array([
             ema_12.iloc[-1] / ema_21.iloc[-1],
             ema_21.iloc[-1] / ema_50.iloc[-1],
@@ -90,7 +91,6 @@ def _add_trend_strengths(
 
     df["trend_strength"] = strengths
     return df
-
 
 def _add_pump_strengths(
     df: pd.DataFrame,
