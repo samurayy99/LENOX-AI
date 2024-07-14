@@ -15,6 +15,7 @@ import json
 from dashboards.dashboard import create_dashboard
 from web_search import WebSearchManager
 from code_interpreter import generate_visualization_response_sync
+from gpt_research_tools import GPTResearchManager
 
 # Load environment variables
 load_dotenv()
@@ -49,6 +50,9 @@ web_search_manager = WebSearchManager()
 document_handler = DocumentHandler(document_folder="/Users/lenox27/LENOX/uploaded_documents", data_folder="data")
 prompt_engine_config = PromptEngineConfig(context_length=10, max_tokens=4096)
 prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools_dict)  # Pass tools_dict here
+
+# Initialize GPTResearchManager
+gpt_research_manager = GPTResearchManager()
 
 # Initialize Lenox with all necessary components
 lenox = Lenox(tools=tools, document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key)

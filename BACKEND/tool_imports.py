@@ -16,8 +16,8 @@ from fearandgreed_tools import get_fear_and_greed_index
 from whale_alert_tools import get_whale_alert_status, get_transaction_by_hash, get_recent_transactions
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 from integration_tools import get_current_price, get_historical_prices, comment_on_price
-
-
+from integration2_tools import combined_technical_analysis, generate_recommendation
+from integration3_tools import combined_market_analysis, combined_analysis_recommendation
 
 
 
@@ -92,6 +92,14 @@ def import_tools():
         get_current_price,
         get_historical_prices,
         comment_on_price,
+        
+        # Integration2 Tools
+        combined_technical_analysis,
+        generate_recommendation,
+        
+        # Integration3 Tools
+        combined_market_analysis,
+        combined_analysis_recommendation,
         
         
     ]
