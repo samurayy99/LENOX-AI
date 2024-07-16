@@ -323,13 +323,11 @@ function processResponseData(data) {
 }
 
 
-
-
 function convertUrlsToLinks(text) {
     const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
     return text.replace(urlRegex, url => {
         // Check if the URL is already wrapped in an <a> tag
-        if (url.startsWith('<a href="')) {
+        if (text.includes(`<a href="${url}`)) {
             return url;
         }
         return `<a href="${url}" target="_blank">${url}</a>`;

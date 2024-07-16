@@ -17,9 +17,6 @@ from whale_alert_tools import get_whale_alert_status, get_transaction_by_hash, g
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 from integration_tools import get_current_price, get_historical_prices, comment_on_price
 from integration2_tools import combined_technical_analysis, generate_recommendation
-from integration3_tools import combined_market_analysis, combined_analysis_recommendation
-
-
 
 
 def import_tools():
@@ -58,7 +55,7 @@ def import_tools():
         search_youtube,  # Searches YouTube for videos related to a specified cryptocurrency.
         process_youtube_video,  # Processes a YouTube video to extract relevant data.
         query_youtube_video,  # Queries detailed information about a specific YouTube video.
-
+        
         # CoinPaprika Tools
         get_coin_details,  # Retrieves detailed information about a specified cryptocurrency.
         get_coin_tags,  # Retrieves tags associated with a specified cryptocurrency.
@@ -97,10 +94,6 @@ def import_tools():
         combined_technical_analysis,
         generate_recommendation,
         
-        # Integration3 Tools
-        combined_market_analysis,
-        combined_analysis_recommendation,
-        
-        
+
     ]
     return tools

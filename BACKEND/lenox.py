@@ -9,7 +9,6 @@ from langchain.schema.runnable import RunnablePassthrough
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain.agents.format_scratchpad import format_to_openai_functions
 from lenox_memory import SQLChatMessageHistory
-from web_search import WebSearchManager
 import requests
 from gpt_research_tools import GPTResearchManager
 from intent_detection import IntentDetector
@@ -25,8 +24,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-# Initialize WebSearchManager
-web_search_manager = WebSearchManager()
+
 
 
 class Lenox:
@@ -36,9 +34,8 @@ class Lenox:
         self.memory = SQLChatMessageHistory(session_id="my_session", connection_string=connection_string)
         self.openai_api_key = openai_api_key  # Save the API key
         self.db_path = 'lenox.db'
-        self.web_search_manager = WebSearchManager()
         self.gpt_research_manager = GPTResearchManager()
-        self.intent_detector = IntentDetector(self.prompt_engine, self.web_search_manager, self.gpt_research_manager)  # Updated
+        self.intent_detector = IntentDetector(self.prompt_engine, self.gpt_research_manager)  # Corrected attribute name
         self.setup_components(tools)
         self._init_feedback_table()
 
@@ -48,8 +45,6 @@ class Lenox:
         self.prompt = self.configure_prompts()
         self.chain = self.setup_chain()
         self.qa = AgentExecutor(agent=self.chain, tools=tools, verbose=False)
-
-    
 
     def setup_chain(self):
         """Set up the agent chain."""
@@ -61,11 +56,6 @@ class Lenox:
             | self.model
             | OpenAIFunctionsAgentOutputParser()
         )
-
-    
-
-
-
 
     def configure_prompts(self, context_messages: Optional[List[str]] = None, user_query: str = ""):
         """Configure the prompt template with dynamic context."""
@@ -83,7 +73,6 @@ class Lenox:
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
 
-    
     def convchain(self, query: str, session_id: str = "my_session") -> dict:
         """Process a user query."""
         if not query:

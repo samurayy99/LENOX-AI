@@ -13,7 +13,6 @@ from tool_imports import import_tools
 import whisper
 import json
 from dashboards.dashboard import create_dashboard
-from web_search import WebSearchManager
 from code_interpreter import generate_visualization_response_sync
 from gpt_research_tools import GPTResearchManager
 
@@ -43,8 +42,6 @@ tools = import_tools()
 # Ensure tools is a dictionary
 tools_dict = {tool.name: tool for tool in tools} 
 
-# Initialize WebSearchManager
-web_search_manager = WebSearchManager()
 
 # Create instances of your components
 document_handler = DocumentHandler(document_folder="/Users/lenox27/LENOX/uploaded_documents", data_folder="data")
@@ -90,18 +87,6 @@ def gpt_research():
     # Corrected call to handle_gpt_research
     result = lenox.intent_detector.handle_gpt_research(user_query=query, report_type=report_type, report_source=report_source)
     return jsonify(result)
-
-
-@app.route('/search', methods=['POST'])
-def search():
-    data = request.get_json()
-    query = data.get('query', '')
-    if not query:
-        return jsonify({'error': 'Empty query.'}), 400
-
-    result = lenox.intent_detector.web_search_manager.run_search(query)  # Ensure it uses lenox instance's web_search_manager
-    return jsonify(result)
-
 
 
 

@@ -7,8 +7,11 @@ from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from langchain.chains.question_answering import load_qa_chain
 import scrapetube
+import logging
 
-
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -51,11 +54,14 @@ def process_youtube_video(url: str) -> List[Document]:
         List[Document]: A list of documents representing the video content.
     """
     try:
+        logger.debug(f"Processing YouTube video URL: {url}")
         loader = YoutubeLoader.from_youtube_url(url, add_video_info=True)
         documents = loader.load()
+        logger.debug(f"Loaded documents: {documents}")
         return documents
     except Exception as e:
-        return [Document(page_content=str(e), metadata={})] 
+        logger.error(f"Error processing YouTube video: {str(e)}")
+        return [Document(page_content=str(e), metadata={})]
 
 @tool
 def query_youtube_video(url: str, question: str) -> str:
@@ -70,12 +76,18 @@ def query_youtube_video(url: str, question: str) -> str:
         str: The answer to the question based on the video content.
     """
     try:
+        logger.debug(f"Querying YouTube video URL: {url} with question: {question}")
         documents = process_youtube_video(url)
+        if not documents or "Error" in documents[0].page_content:
+            return "Failed to retrieve video content."
+
         llm = OpenAI(temperature=0)
         chain = load_qa_chain(llm, chain_type="default")
         output = chain.run(input_documents=documents, question=question)
+        logger.debug(f"Query result: {output}")
         return output
     except Exception as e:
+        logger.error(f"Error querying YouTube video: {str(e)}")
         return f"Error querying YouTube video: {str(e)}"
 
 
