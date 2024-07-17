@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 
 class Lenox:
-    def __init__(self, tools, document_handler, prompt_engine=None, connection_string="sqlite:///lenox.db", openai_api_key=None):
-        self.document_handler = document_handler
+    def __init__(self, tools, chart_analyzer, prompt_engine=None, connection_string="sqlite:///lenox.db", openai_api_key=None):
+        self.chart_analyzer = chart_analyzer
         self.prompt_engine = prompt_engine if prompt_engine else PromptEngine(config=PromptEngineConfig(), tools=tools)
         self.memory = SQLChatMessageHistory(session_id="my_session", connection_string=connection_string)
         self.openai_api_key = openai_api_key  # Save the API key
@@ -159,9 +159,9 @@ class Lenox:
         
         
 
-    def handle_document_query(self, query: str) -> str:
-        """Query the document index."""
-        return self.document_handler.query(query)
+    # Update any methods that were using document_handler to use chart_analyzer instead
+    def handle_document_query(self, query, filename):
+        return self.chart_analyzer.query(query, filename)
 
     def synthesize_text(self, model, input_text, voice, response_format='mp3', speed=1):
         headers = {
@@ -188,46 +188,124 @@ class Lenox:
             return None
 
     def _init_feedback_table(self):
-        # Initialize the feedback table if it does not exist
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''CREATE TABLE IF NOT EXISTS feedback (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            query TEXT NOT NULL,
-                            feedback TEXT NOT NULL,
-                            session_id TEXT NOT NULL
-                        )''')
-        conn.commit()
-        conn.close()
+        """Initialize the feedback table if it does not exist."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''CREATE TABLE IF NOT EXISTS feedback (
+                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    query TEXT NOT NULL,
+                                    feedback TEXT NOT NULL,
+                                    session_id TEXT NOT NULL,
+                                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                                )''')
+            logger.info("Feedback table initialized successfully.")
+        except sqlite3.Error as e:
+            logger.error(f"Error initializing feedback table: {e}")
 
     def teach_from_feedback(self, query: str, feedback: str, session_id: str) -> None:
         """
-        Update the model or system based on user feedback.
+        Store user feedback and update the model or system based on it.
 
         Parameters:
         - query (str): The query for which feedback is provided.
-        - feedback (str): The feedback from the user.
+        - feedback (str): The feedback from the user ('positive' or 'negative').
         - session_id (str): The session ID of the user providing the feedback.
         """
-        # Store feedback in the database
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO feedback (query, feedback, session_id) VALUES (?, ?, ?)', 
-                       (query, feedback, session_id))
-        conn.commit()
-        conn.close()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('INSERT INTO feedback (query, feedback, session_id) VALUES (?, ?, ?)', 
+                               (query, feedback, session_id))
+            logger.info(f"Feedback stored for query: {query}")
+            
+            # Process feedback in real-time
+            self.process_feedback(feedback, query, session_id)
+        except sqlite3.Error as e:
+            logger.error(f"Error storing feedback: {e}")
 
-    def process_feedback(self, feedback: str, session_id: str) -> str:
+    def process_feedback(self, feedback: str, query: str, session_id: str) -> str:
         """
-        Process feedback in real-time.
+        Process feedback in real-time to improve the model.
 
         Parameters:
-        - feedback (str): The feedback provided by the user.
+        - feedback (str): The feedback provided by the user ('positive' or 'negative').
+        - query (str): The original query associated with the feedback.
         - session_id (str): The session ID of the user providing the feedback.
 
         Returns:
         - str: Response after processing feedback.
         """
-        # Here you can add logic to process the feedback in real-time
-        print(f"Processing feedback '{feedback}' for session '{session_id}'")
-        return "Feedback processed successfully"
+        try:
+            if feedback == 'positive':
+                # Logic to reinforce good responses
+                logger.info(f"Positive feedback received for query: {query}")
+                # Example: You could update a weight or score for this response
+                # self.update_response_score(query, 1)
+            elif feedback == 'negative':
+                # Logic to learn from negative feedback
+                logger.info(f"Negative feedback received for query: {query}")
+                # Example: You could decrease a weight or score for this response
+                # self.update_response_score(query, -1)
+            else:
+                logger.warning(f"Unknown feedback type received: {feedback}")
+
+            # Add your logic here to use this feedback for improving future responses
+            # This could involve updating a machine learning model, adjusting response templates, etc.
+
+            return "Feedback processed successfully"
+        except Exception as e:
+            logger.error(f"Error processing feedback: {e}")
+            return "Error processing feedback"
+
+    def apply_feedback(self):
+        """Periodically apply accumulated feedback to improve the model."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT query, feedback FROM feedback WHERE timestamp > date('now', '-7 days')")
+                recent_feedback = cursor.fetchall()
+
+            # Process recent feedback to improve your model
+            positive_queries = []
+            negative_queries = []
+            for query, feedback in recent_feedback:
+                if feedback == 'positive':
+                    positive_queries.append(query)
+                elif feedback == 'negative':
+                    negative_queries.append(query)
+
+            # Example: Update the model based on feedback
+            if positive_queries:
+                logger.info(f"Reinforcing model for {len(positive_queries)} positive queries")
+                self.reinforce_positive_responses(positive_queries)
+
+            if negative_queries:
+                logger.info(f"Adjusting model for {len(negative_queries)} negative queries")
+                self.adjust_negative_responses(negative_queries)
+
+            logger.info("Applied recent feedback to improve the model")
+        except sqlite3.Error as e:
+            logger.error(f"Error applying feedback: {e}")
+
+    def reinforce_positive_responses(self, queries):
+        """
+        Method to reinforce the model for queries that received positive feedback.
+        Implement your logic here to improve the model for these queries.
+        """
+        # Example implementation:
+        for query in queries:
+            # You might update weights, adjust response templates, or fine-tune your model
+            logger.info(f"Reinforcing model for query: {query}")
+        # Add your specific implementation here
+
+    def adjust_negative_responses(self, queries):
+        """
+        Method to adjust the model for queries that received negative feedback.
+        Implement your logic here to improve responses for these queries in the future.
+        """
+        # Example implementation:
+        for query in queries:
+            # You might update weights, adjust response templates, or fine-tune your model
+            logger.info(f"Adjusting model for query: {query}")
+        # Add your specific implementation here

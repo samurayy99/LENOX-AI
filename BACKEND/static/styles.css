@@ -332,10 +332,20 @@ button:hover {
   font-size: 18px;
   cursor: pointer;
   padding: 5px;
+  transition: transform 0.2s, opacity 0.2s;
 }
 
 .feedback-buttons button:hover {
   color: #007BFF;
+}
+
+.feedback-buttons button:active {
+  transform: scale(0.9);
+}
+
+.feedback-buttons button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .thumbs-up::before {
@@ -345,6 +355,34 @@ button:hover {
 .thumbs-down::before {
   content: '👎';
 }
+
+
+.feedback-buttons button {
+  transition: opacity 0.3s, color 0.3s;
+}
+
+.feedback-buttons button.disabled {
+  opacity: 0.5;
+}
+
+.feedback-buttons button.selected {
+  opacity: 1;
+}
+
+.thumbs-up.selected {
+  color: green;
+}
+
+.thumbs-down.selected {
+  color: red;
+}
+
+.feedback-message {
+  font-size: 0.9em;
+  margin-top: 5px;
+  font-style: italic;
+}
+
 
 /* Play Button */
 .play-button {

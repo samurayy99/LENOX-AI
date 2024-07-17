@@ -136,63 +136,114 @@ function processResponseData(data) {
 
 
 document.getElementById('uploadForm').addEventListener('submit', function (event) {
-    event.preventDefault(); // Prevent the default form submission
+    event.preventDefault();
 
     const fileInput = document.getElementById('fileUpload');
-    const formData = new FormData();
-
-    for (const file of fileInput.files) {
-        formData.append('file', file);
+    const file = fileInput.files[0];
+    if (!file) {
+        appendMessage('No file selected.', 'error-message');
+        return;
     }
 
-    fetch('/upload', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            console.error('Error uploading file:', data.error);
-            appendMessage(`Error uploading file: ${data.error}`, 'error-message');
-        } else {
-            console.log('File uploaded successfully:', data.message);
-            appendMessage(`File uploaded successfully: ${data.message}`, 'bot-message');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        appendMessage('An error occurred while uploading the file.', 'error-message');
-    });
+    showLoadingIndicator(true);
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const fileContent = e.target.result;
+        
+        // Display the uploaded image
+        const imgElement = document.createElement('img');
+        imgElement.src = fileContent;
+        imgElement.style.maxWidth = '100%';
+        imgElement.style.height = 'auto';
+        appendMessage('Uploaded Chart:', 'bot-message');
+        appendMessage(imgElement.outerHTML, 'bot-message');
+
+        // Send only the base64 part to the server
+        const base64Content = fileContent.split(',')[1];
+        
+        fetch('/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_content: base64Content })
+        })
+        .then(response => response.json())
+        .then(data => {
+            showLoadingIndicator(false);
+            if (data.error) {
+                console.error('Error uploading file:', data.error);
+                appendMessage(`Error uploading file: ${data.error}`, 'error-message');
+            } else {
+                console.log('File uploaded successfully:', data.message);
+                appendMessage(`File uploaded successfully: ${data.message}`, 'bot-message');
+                
+                if (data.analysis) {
+                    appendMessage(`Chart Analysis: ${data.analysis}`, 'bot-message');
+                }
+            }
+        })
+        .catch(error => {
+            showLoadingIndicator(false);
+            console.error('Error:', error);
+            appendMessage('An error occurred while uploading the file.', 'error-message');
+        });
+    };
+    reader.readAsDataURL(file);
 });
 
 
+let currentAudio = null;
+let currentPlayButton = null;
 
 function appendMessage(message, className, shouldIncludeAudio = false) {
     const chatMessages = document.getElementById('chat-messages');
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('chat-message', className);
 
-    // Convert URLs to links
-    message = convertUrlsToLinks(message);
+    if (typeof message === 'string') {
+        // Convert URLs to links
+        message = convertUrlsToLinks(message);
 
-    // Convert newlines to <br> tags
-    message = message.replace(/\n/g, '<br>');
+        // Convert newlines to <br> tags
+        message = message.replace(/\n/g, '<br>');
 
-    // Convert markdown-style lists to HTML lists
-    message = message.replace(/(\*\*Response:\*\*)\n/g, '$1<br><ul>');
-    message = message.replace(/- (.+)/g, '<li>$1</li>');
-    message = message.replace(/<\/li>\n/g, '</li>');
-    message = message.replace(/<\/li><br>/g, '</li>');
-    message = message.replace(/<\/ul><br>/g, '</ul>');
-    message = message.replace(/<\/ul>/g, '</ul><br>');
+        // Convert markdown-style lists to HTML lists
+        message = message.replace(/(\*\*Response:\*\*)\n/g, '$1<br><ul>');
+        message = message.replace(/- (.+)/g, '<li>$1</li>');
+        message = message.replace(/<\/li>\n/g, '</li>');
+        message = message.replace(/<\/li><br>/g, '</li>');
+        message = message.replace(/<\/ul><br>/g, '</ul>');
+        message = message.replace(/<\/ul>/g, '</ul><br>');
 
-    messageDiv.innerHTML = message;
+        messageDiv.innerHTML = message;
+    } else {
+        // If message is not a string (e.g., HTML for image), use innerHTML directly
+        messageDiv.innerHTML = message;
+    }
 
     if (shouldIncludeAudio && className === 'bot-message') {
         const button = document.createElement('button');
         button.textContent = 'Play';
-        button.classList.add('play-button'); // Add a class to the play button for styling
-        button.onclick = () => fetchAudio(message);
+        button.classList.add('play-button');
+        button.onclick = () => {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
+                currentPlayButton.textContent = 'Play';
+                currentPlayButton.disabled = false;
+                if (currentPlayButton !== button) {
+                    button.textContent = 'Playing...';
+                    button.disabled = true;
+                    fetchAudio(message, button);
+                }
+            } else {
+                button.textContent = 'Playing...';
+                button.disabled = true;
+                fetchAudio(message, button);
+            }
+            currentPlayButton = button;
+        };
         messageDiv.appendChild(button);
     }
 
@@ -202,6 +253,46 @@ function appendMessage(message, className, shouldIncludeAudio = false) {
 
     chatMessages.appendChild(messageDiv);
     scrollToLatestMessage();
+}
+
+function fetchAudio(text, button) {
+    const data = { input: text, voice: "alloy" };
+
+    fetch('/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    }).then(response => {
+        if (!response.ok) throw new Error(`Failed to fetch audio with status: ${response.status}`);
+        return response.blob();
+    }).then(blob => {
+        const url = URL.createObjectURL(blob);
+        currentAudio = new Audio(url);
+        currentAudio.play();
+
+        currentAudio.onended = () => {
+            URL.revokeObjectURL(url);
+            currentAudio = null;
+            if (button) {
+                button.textContent = 'Play';
+                button.disabled = false;
+            }
+        };
+    }).catch(error => {
+        console.error('Error fetching or playing audio:', error);
+        appendMessage('Failed to play audio.', 'error-message');
+        currentAudio = null;
+        if (button) {
+            button.textContent = 'Play';
+            button.disabled = false;
+        }
+    });
+}
+
+
+function scrollToLatestMessage() {
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 document.querySelectorAll('.dropdown-content a').forEach(item => {
@@ -230,44 +321,15 @@ function handleAudioResponse(response) {
     });
 }
 
-function fetchAudio(text) {
-    const data = { input: text, voice: "alloy" };
-    fetch('/synthesize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    }).then(response => {
-        if (!response.ok) throw new Error(`Failed to fetch audio with status: ${response.status}`);
-        return response.blob();
-    }).then(blob => {
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.play();
-    }).catch(error => {
-        console.error('Error fetching or playing audio:', error);
-        appendMessage('Failed to play audio.', 'error-message');
-    });
-}
 
 
-
-function handleVisualResponse(data) {
-    const visualizationContainer = appendVisualizationPlaceholder();
-    if (data.content && visualizationContainer) {
-        try {
-            console.log('Visualization data:', data.content.image);
-            const imgElement = document.createElement('img');
-            imgElement.src = `data:image/png;base64,${data.content.image}`;
-            visualizationContainer.appendChild(imgElement);
-
-            // Append the textual response
-            appendMessage(data.content.text, 'bot-message');
-        } catch (e) {
-            console.error('Error rendering visualization:', e);
-            appendMessage('An error occurred while rendering the visualization.', 'error-message');
-        }
+function handleVisualResponse(content) {
+    console.log("Handling visual response:", content);
+    if (content && content.status === 'success') {
+        appendMessage(content.message, 'bot-message');
     } else {
-        appendMessage('Visualization content is not available or container missing.', 'error-message');
+        console.error('Unexpected visualization content:', content);
+        appendMessage('An error occurred while processing the visualization response.', 'error-message');
     }
 }
 
@@ -286,8 +348,13 @@ function processResponseData(data) {
     try {
         switch (data.type) {
             case 'visualization':
-                // No need to parse content as JSON, it's already an object
-                appendMessage(data.content.message, 'bot-message');
+                if (data.content && typeof data.content === 'object') {
+                    handleVisualResponse(data.content);
+                } else if (typeof data.content === 'string') {
+                    handleVisualResponse(JSON.parse(data.content));
+                } else {
+                    throw new Error('Invalid visualization content structure.');
+                }
                 break;
             case 'text':
                 if (typeof data.content === 'string') {
@@ -307,18 +374,33 @@ function processResponseData(data) {
                     throw new Error('Invalid document_response structure.');
                 }
                 break;
+            case 'chart_analysis':
+                if (typeof data.response === 'object') {
+                    appendMessage(`Chart Analysis: ${JSON.stringify(data.response, null, 2)}`, 'bot-message');
+                } else {
+                    throw new Error('Invalid chart_analysis structure.');
+                }
+                break;
             case 'error':
                 console.error('Error response received:', data.content);
                 appendMessage(data.content, 'error-message');
                 break;
             default:
-                console.error('Unexpected response type:', data.type);
-                appendMessage('Received unexpected type of data from the server.', 'error-message');
-                break;
+                throw new Error(`Unexpected response type: ${data.type}`);
         }
     } catch (error) {
         console.error('Error processing response:', error);
         appendMessage(`Error processing response: ${error.message}`, 'error-message');
+    }
+}
+
+function handleVisualResponse(content) {
+    console.log("Handling visual response:", content);
+    if (content && content.status === 'success') {
+        appendMessage(content.message, 'bot-message');
+    } else {
+        console.error('Unexpected visualization content:', content);
+        appendMessage('An error occurred while processing the visualization response.', 'error-message');
     }
 }
 
@@ -344,36 +426,68 @@ function showLoadingIndicator(isLoading) {
     loadingIndicator.style.display = isLoading ? 'block' : 'none';
 }
 
+
 function addFeedbackButtons(messageElement, messageContent) {
     const feedbackButtons = document.createElement('div');
     feedbackButtons.className = 'feedback-buttons';
 
     const thumbsUp = document.createElement('button');
     thumbsUp.className = 'thumbs-up';
-    thumbsUp.onclick = () => sendFeedback(messageContent, 'positive');
+    thumbsUp.onclick = () => handleFeedback(thumbsUp, messageContent, 'positive');
     feedbackButtons.appendChild(thumbsUp);
 
     const thumbsDown = document.createElement('button');
     thumbsDown.className = 'thumbs-down';
-    thumbsDown.onclick = () => sendFeedback(messageContent, 'negative');
+    thumbsDown.onclick = () => handleFeedback(thumbsDown, messageContent, 'negative');
     feedbackButtons.appendChild(thumbsDown);
 
     messageElement.appendChild(feedbackButtons);
 }
 
+
+function handleFeedback(button, messageContent, feedbackType) {
+    // Disable both buttons and add selected class
+    const buttons = button.parentElement.querySelectorAll('button');
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('disabled');
+        if (btn === button) {
+            btn.classList.add('selected');
+        }
+    });
+
+    // Create and append thank you message
+    const feedbackMessage = document.createElement('div');
+    feedbackMessage.className = 'feedback-message';
+    feedbackMessage.textContent = 'Thank you for your feedback!';
+    button.parentElement.appendChild(feedbackMessage);
+
+    // Send feedback
+    sendFeedback(messageContent, feedbackType)
+        .then(response => {
+            console.log('Feedback sent:', response);
+        })
+        .catch(error => {
+            console.error('Error sending feedback:', error);
+            // Remove selected class and re-enable buttons if there's an error
+            buttons.forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('disabled', 'selected');
+            });
+            feedbackMessage.textContent = 'Error sending feedback. Please try again.';
+        });
+}
+
+
 function sendFeedback(query, feedback) {
-    fetch('/feedback', {
+    return fetch('/feedback', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ query, feedback }),
     })
-    .then(response => response.json())
-    .then(data => {
-        console.log('Feedback sent:', data);
-    })
-    .catch((error) => {
-        console.error('Error sending feedback:', error);
-    });
+    .then(response => response.json());
 }
+
+

@@ -1,11 +1,14 @@
+import os
+os.environ["USER_AGENT"] = "LenoxAI/1.0"
+
+
 from flask import Flask, render_template, request, jsonify, session, send_from_directory, redirect
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import os
 import logging
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
-from documents.documents import DocumentHandler
+from documents.documents import ChartAnalyzer
 from lenox import Lenox  # Ensure this imports the updated lenox.py
 from prompts import PromptEngine, PromptEngineConfig
 from werkzeug.utils import secure_filename
@@ -15,6 +18,7 @@ import json
 from dashboards.dashboard import create_dashboard
 from code_interpreter import generate_visualization_response_sync
 from gpt_research_tools import GPTResearchManager
+import base64
 
 # Load environment variables
 load_dotenv()
@@ -44,15 +48,21 @@ tools_dict = {tool.name: tool for tool in tools}
 
 
 # Create instances of your components
-document_handler = DocumentHandler(document_folder="/Users/lenox27/LENOX/uploaded_documents", data_folder="data")
 prompt_engine_config = PromptEngineConfig(context_length=10, max_tokens=4096)
 prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools_dict)  # Pass tools_dict here
 
 # Initialize GPTResearchManager
 gpt_research_manager = GPTResearchManager()
 
+chart_analyzer = ChartAnalyzer()
+
 # Initialize Lenox with all necessary components
-lenox = Lenox(tools=tools, document_handler=document_handler, prompt_engine=prompt_engine, openai_api_key=openai_api_key)
+lenox = Lenox(tools=tools, chart_analyzer=chart_analyzer, prompt_engine=prompt_engine, openai_api_key=openai_api_key)  # Change this line
+
+# Add this function
+def allowed_file(filename):
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 @app.route('/dashboard')
@@ -122,39 +132,33 @@ def transcribe_audio():
         'language': detected_language
     })
 
+
 @app.route('/upload', methods=['POST'])
 def upload_document():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part in the request'}), 400
+    data = request.get_json()
+    if 'file_content' not in data:
+        return jsonify({'error': 'No file content in the request'}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-
-    filename = file.filename
-    if filename is not None:
-        filename = secure_filename(filename)
-        success, message = document_handler.save_document(file)
-        if success:
-            return jsonify({'message': message}), 200
-        else:
-            return jsonify({'error': message}), 500
-    else:
-        return jsonify({'error': 'Unsupported file type'}), 400
-
-@app.route('/document_query', methods=['POST'])
-def document_query():
+    file_content = data['file_content']
     try:
-        data = request.get_json()
-        query = data.get('query', '')
-        if not query:
-            return jsonify({'error': 'Empty query.'}), 400
-
-        result = lenox.handle_document_query(query)
-        return jsonify({'type': 'document_response', 'response': result})
+        # Decode the base64 content
+        decoded_content = base64.b64decode(file_content)
+        
+        # Analyze the chart
+        analysis = chart_analyzer.analyze_chart(decoded_content)
+        
+        return jsonify({
+            'message': 'Chart successfully analyzed.',
+            'analysis': analysis
+        }), 200
     except Exception as e:
-        app.logger.error(f"Error processing document query: {e}")
-        return jsonify({'error': 'Failed to process document query.'}), 500
+        app.logger.error(f"Error processing file: {e}")
+        return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+
+# Remove the /chart_query route if it's no longer needed
+
+
+
 
 @app.route('/synthesize', methods=['POST'])
 def synthesize_speech():
@@ -215,11 +219,23 @@ def handle_feedback():
 
     query = feedback_data['query']
     feedback = feedback_data['feedback']
+    session_id = session.get('session_id', 'default_session')
 
     try:
-        lenox.teach_from_feedback(query, feedback, session['session_id'])
-        return jsonify({'message': 'Feedback processed successfully, and learning was updated.'})
+        # Store feedback in database
+        lenox.teach_from_feedback(query, feedback, session_id)
+        
+        # Process feedback in real-time (if implemented)
+        response = lenox.process_feedback(feedback, query, session_id)  # Add query here
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Feedback processed successfully.',
+            'response': response,
+            'feedbackType': feedback
+        })
     except Exception as e:
+        app.logger.error(f"Error processing feedback: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -252,7 +268,10 @@ def on_connect():
 
 @socketio.on('send_feedback')
 def on_feedback(data):
-    response = lenox.process_feedback(data['feedback'], session['session_id'])
+    query = data.get('query', '')  # Add this line to get the query
+    feedback = data['feedback']
+    session_id = session['session_id']
+    response = lenox.process_feedback(feedback, query, session_id)  # Add query and session_id
     emit('feedback_response', {'message': 'Feedback processed', 'data': response})
 
 if __name__ == '__main__':
