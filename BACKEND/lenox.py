@@ -1,22 +1,19 @@
 import sqlite3
-from typing import Dict, List, Union, Optional
+from typing import List, Optional
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
 from langchain.agents import AgentExecutor
 from langchain.schema.runnable import RunnablePassthrough
-from langchain_core.messages import HumanMessage, AIMessage
 from langchain.agents.format_scratchpad import format_to_openai_functions
-from lenox_memory import SQLChatMessageHistory
 import requests
+from langchain.memory import ConversationBufferMemory, ConversationSummaryBufferMemory
 from gpt_research_tools import GPTResearchManager
-from intent_detection import IntentDetector
+from intent_detection import IntentDetector, IntentType
 # Import system prompt content from prompts.py
 from prompts import system_prompt_content, PromptEngineConfig, PromptEngine
-from langchain.schema import HumanMessage, AIMessage
 import logging  # Use built-in logging module
-from code_interpreter import generate_visualization_response_sync  # Import the function
 
 
 # Initialize logging
@@ -31,8 +28,15 @@ class Lenox:
     def __init__(self, tools, chart_analyzer, prompt_engine=None, connection_string="sqlite:///lenox.db", openai_api_key=None):
         self.chart_analyzer = chart_analyzer
         self.prompt_engine = prompt_engine if prompt_engine else PromptEngine(config=PromptEngineConfig(), tools=tools)
-        self.memory = SQLChatMessageHistory(session_id="my_session", connection_string=connection_string)
+        summarization_llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
+        self.conversation_buffer = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
         self.openai_api_key = openai_api_key  # Save the API key
+                # Initialize ConversationSummaryBufferMemory with the llm parameter
+        self.memory = ConversationSummaryBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+            llm=summarization_llm  # Add this line
+        )
         self.db_path = 'lenox.db'
         self.gpt_research_manager = GPTResearchManager()
         self.intent_detector = IntentDetector(self.prompt_engine, self.gpt_research_manager)  # Corrected attribute name
@@ -41,7 +45,7 @@ class Lenox:
 
     def setup_components(self, tools):
         self.functions = [convert_to_openai_function(f) for f in tools]
-        self.model = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.8).bind(functions=self.functions)
+        self.model = ChatOpenAI(model="gpt-4o-mini", temperature=0.6).bind(functions=self.functions)
         self.prompt = self.configure_prompts()
         self.chain = self.setup_chain()
         self.qa = AgentExecutor(agent=self.chain, tools=tools, verbose=False)
@@ -73,91 +77,60 @@ class Lenox:
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
 
+    
+
     def convchain(self, query: str, session_id: str = "my_session") -> dict:
-        """Process a user query."""
         if not query:
             return {"type": "text", "content": "Please enter a query."}
 
         logger.debug(f"Received query: {query}")
 
-        # Detect intent and handle it using the IntentDetector
+        # Detect intent
         detected_intent = self.intent_detector.detect_intent(query)
-        if detected_intent in self.intent_detector.intent_handlers:
-            # If the detected intent has a specific handler, use it
-            response = self.intent_detector.handle_intent(detected_intent, query)
-            output = response.get('content', 'Error processing the request.')
-            response_type = response.get('type', 'text')
-        elif self.is_visualization_query(query):
-            # Handle visualization queries
-            response = self.handle_visualization_query(query)
-            output = response.get('content', 'Error processing the request.')
-            response_type = response.get('type', 'visualization')
-        else:
-            # General conversational handling
-            self.memory.session_id = session_id
-            new_message = HumanMessage(content=query)
-            self.memory.add_message(new_message)
-            chat_history = self.memory.messages()
+        logger.debug(f"Detected intent: {detected_intent}")
 
-            logger.debug(f"Chat history: {chat_history}")
+        # Handle intent
+        if detected_intent != IntentType.GENERAL:
+            result = self.intent_detector.handle_intent(detected_intent, query)
+            return result  # Assuming handle_intent returns a dict with 'type' and 'content'
 
-            # Ensure chat_history is a list of strings
-            chat_history_contents = [msg.content for msg in chat_history if isinstance(msg.content, str)]
-            self.prompt = self.configure_prompts(context_messages=chat_history_contents, user_query=query)
-            result = self.qa.invoke({"input": query, "chat_history": chat_history})
-            output = result.get('output', 'Error processing the request.')
-            response_type = 'text'
+        # Update conversation buffer and memory
+        self.conversation_buffer.chat_memory.add_user_message(query)
+        self.memory.chat_memory.add_user_message(query)
 
-        logger.debug(f"Generated output: {output}")
+        # Retrieve recent conversation history
+        chat_history = self.memory.load_memory_variables({})["chat_history"]
+
+        # Ensure chat_history is a list of strings
+        chat_history_contents = [str(msg) for msg in chat_history if msg is not None]
+
+        # Configure prompt with chat history
+        prompt = self.configure_prompts(context_messages=chat_history_contents, user_query=query)
+
+        # Generate response
+        result = self.qa.invoke(
+            {"input": prompt, "chat_history": chat_history_contents},
+            config={"configurable": {"session_id": session_id}}
+        )
+
+        output = result.get('output', 'Error processing the request.')
+
+        # Add AI response to conversation buffer and memory
+        self.conversation_buffer.chat_memory.add_ai_message(output)
+        self.memory.chat_memory.add_ai_message(output)
 
         # Ensure output is a string
         if not isinstance(output, str):
             output = str(output)
 
-        self.memory.add_message(AIMessage(content=output))
-        return {"type": response_type, "content": output}
+        return {"type": "text", "content": output}
+    
+    
 
-   
-   
-    def is_visualization_query(self, query: str) -> bool:
-        """Identify visualization-based queries."""
-        visualization_keywords = ["visualize", "graph", "chart", "plot", "show me a graph of", "display data"]
-        return any(keyword in query.lower() for keyword in visualization_keywords)
-
-    def parse_visualization_type(self, query: str) -> str:
-        """Parse the type of visualization requested."""
-        visualization_keywords = {
-            'line': ['line', 'linear'],
-            'bar': ['bar', 'column'],
-            'scatter': ['scatter', 'point'],
-            'pie': ['pie', 'circle']
-        }
-        for vis_type, keywords in visualization_keywords.items():
-            if any(keyword in query.lower() for keyword in keywords):
-                return vis_type
-        return 'line'  # Default to line if unspecified
-
-    def fetch_data_for_visualization(self, query: str) -> Dict[str, Union[List[int], List[str]]]:
-        """Extract data for visualization."""
-        numbers = [int(s) for s in query.split() if s.isdigit()]
-        if numbers:
-            return {'x': list(range(1, len(numbers) + 1)), 'y': numbers}
-        else:
-            return {'x': [1, 2, 3, 4], 'y': [10, 11, 12, 13]}
-
-    def handle_visualization_query(self, query: str) -> dict:
-        try:
-            img_base64 = generate_visualization_response_sync(query)
-            if img_base64:
-                return {"type": "visualization", "content": img_base64}
-            else:
-                return {"type": "error", "content": "Failed to generate visualization."}
-        except Exception as e:
-            logger.error(f"Error in handle_visualization_query: {str(e)}")
-            return {"type": "error", "content": "An error occurred while generating visualization."}
-
-        
-        
+    def construct_prompt(self, query, summarized_history):
+        # Construct a more informative prompt using the query and summarized history
+        return f"Given the following conversation summary:\n{summarized_history}\n\nUser query: {query}\n\nPlease provide a relevant and context-aware response:"
+    
 
     # Update any methods that were using document_handler to use chart_analyzer instead
     def handle_document_query(self, query, filename):

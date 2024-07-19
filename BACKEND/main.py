@@ -14,11 +14,12 @@ from prompts import PromptEngine, PromptEngineConfig
 from werkzeug.utils import secure_filename
 from tool_imports import import_tools
 import whisper
-import json
 from dashboards.dashboard import create_dashboard
 from code_interpreter import generate_visualization_response_sync
 from gpt_research_tools import GPTResearchManager
 import base64
+import os
+import json
 
 # Load environment variables
 load_dotenv()
@@ -55,6 +56,8 @@ prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools_dict)  # P
 gpt_research_manager = GPTResearchManager()
 
 chart_analyzer = ChartAnalyzer()
+
+
 
 # Initialize Lenox with all necessary components
 lenox = Lenox(tools=tools, chart_analyzer=chart_analyzer, prompt_engine=prompt_engine, openai_api_key=openai_api_key)  # Change this line
@@ -183,7 +186,6 @@ def synthesize_speech():
 
 
 
-
 @app.route('/query', methods=['POST'])
 def handle_query():
     try:
@@ -239,6 +241,7 @@ def handle_feedback():
         return jsonify({'error': str(e)}), 500
 
 
+
 @app.route('/create_visualization', methods=['POST'])
 def create_visualization():
     data = request.get_json()
@@ -259,6 +262,8 @@ def create_visualization():
     except Exception as e:
         app.logger.error(f"Unexpected error: {str(e)}")
         return jsonify({"status": "error", "error": "An unexpected error occurred."}), 500
+
+
 
 
 

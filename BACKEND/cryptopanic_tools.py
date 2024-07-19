@@ -20,8 +20,8 @@ def get_latest_news() -> str:
         response = requests.get(url)
         if response.status_code == 200:
             news = response.json()
-            news_titles = [f"{item['title']} - <a href='{item['url']}'>{item['url']}</a>" for item in news['results']]
-            return '<br>'.join(news_titles)
+            news_titles = [f"[{item['title']}]({item['url']})" for item in news['results']]
+            return '\n\n'.join(news_titles)
         else:
             return f"Failed to fetch news: {response.status_code}"
     except Exception as e:
@@ -43,7 +43,7 @@ def get_news_sources() -> str:
             news = response.json()
             sources = set(item['domain'] for item in news['results'])
             formatted_sources = [f"{i+1}. {source}" for i, source in enumerate(sources)]
-            return '<br>'.join(formatted_sources)
+            return '\n'.join(formatted_sources)
         else:
             return f"Failed to fetch news sources: {response.status_code}"
     except Exception as e:
@@ -65,7 +65,7 @@ def get_last_news_title() -> str:
             news = response.json()
             if news['results']:
                 item = news['results'][0]
-                return f"{item['title']} - <a href='{item['url']}'>{item['url']}</a>"
+                return f"[{item['title']}]({item['url']})"
             else:
                 return "No news available"
         else:

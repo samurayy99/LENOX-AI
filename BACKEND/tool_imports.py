@@ -13,7 +13,7 @@ from coinpaprika_tools import get_coin_details, get_coin_tags, get_market_overvi
 from cryptopanic_tools import get_latest_news, get_news_sources, get_last_news_title
 from coinmarketcap_tools import get_latest_listings, get_crypto_metadata, get_global_metrics
 from fearandgreed_tools import get_fear_and_greed_index
-from whale_alert_tools import get_whale_alert_status, get_transaction_by_hash, get_recent_transactions
+from whale_alert_tools import get_whale_alert_status, get_recent_large_transactions
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 from integration_tools import get_current_price, get_historical_prices, comment_on_price
 from integration2_tools import combined_technical_analysis, generate_recommendation
@@ -77,8 +77,7 @@ def import_tools():
 
         # Whale Alert Tools
         get_whale_alert_status,  # Retrieves the current status of Whale Alert.
-        get_transaction_by_hash,  # Retrieves details of a specific transaction by its hash.
-        get_recent_transactions,  # Retrieves recent large transactions in the cryptocurrency market.
+        get_recent_large_transactions,  # Retrieves recent large transactions in the cryptocurrency market.
 
         # Binance Tools
         get_binance_ticker,  # Retrieves the current ticker price from Binance.

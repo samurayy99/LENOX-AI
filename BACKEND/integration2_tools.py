@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from langchain.tools import tool
 from coingecko_tools import calculate_rsi, calculate_macd
 from fearandgreed_tools import get_fear_and_greed_index
-from whale_alert_tools import get_recent_transactions
+from whale_alert_tools import get_recent_large_transactions
 
 @tool
 def combined_technical_analysis(symbol: str, prices: list, period: int = 14) -> str:
@@ -30,7 +30,7 @@ def combined_technical_analysis(symbol: str, prices: list, period: int = 14) -> 
         
         # Get recent whale transactions
         start_time = int((datetime.now() - timedelta(days=1)).timestamp())
-        whale_transactions = get_recent_transactions(start=start_time)
+        whale_transactions = get_recent_large_transactions(start=start_time)
         
         # Combine the results into a comprehensive analysis
         analysis = f"RSI Analysis: {rsi_result}\n\n"

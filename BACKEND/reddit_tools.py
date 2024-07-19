@@ -2,7 +2,6 @@ import os
 from collections import Counter
 from typing import List
 import string
-
 import praw
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -42,7 +41,7 @@ def get_reddit_data(subreddit: str, category: str = 'hot') -> str:
     """
     sub = reddit.subreddit(subreddit)
     posts = getattr(sub, category)(limit=10)  # Increase the limit to fetch more data
-    posts_str = "\n\n".join([f"[Title: {post.title}]({post.url})" for post in posts])
+    posts_str = "\n\n".join([f"[Title: {post.title}](https://www.reddit.com{post.permalink})" for post in posts])
     return f"Latest posts from r/{subreddit}:\n{posts_str}"
 
 @tool
@@ -99,6 +98,7 @@ def interpret_sentiment(score: float) -> str:
     else:
         return "The sentiment is neutral. There are mixed feelings about this topic, with no strong lean towards positive or negative."
 
+
 @tool
 def find_trending_cryptos(subreddits: List[str], time_filter='day') -> str:
     """
@@ -107,19 +107,28 @@ def find_trending_cryptos(subreddits: List[str], time_filter='day') -> str:
     topics = Counter()
     new_coins = set()
     stopwords_set = set(stopwords.words('english'))
+    
+    # Add common crypto terms to avoid them being flagged as new coins
+    common_crypto_terms = {"crypto", "cryptocurrency", "blockchain", "token", "coin", "defi", "nft", "mining", "wallet", "exchange"}
+    known_cryptos.update(common_crypto_terms)
 
     for subreddit in subreddits:
         for submission in reddit.subreddit(subreddit).hot(limit=500):
-            doc = nlp(submission.title)
-            words = [token.text.lower() for token in doc if token.text.lower() not in stopwords_set and token.is_alpha]
-            topics.update(words)
-            new_coins.update(word for word in words if word.lower() not in known_cryptos and word.isalpha())
+            doc = nlp(submission.title.lower())
+            words = [token.lemma_ for token in doc if token.text.lower() not in stopwords_set and token.is_alpha and len(token.text) > 2]
+            
+            # Update topics counter
+            topics.update(word for word in words if word in known_cryptos or word.endswith("coin"))
+            
+            # Identify potential new coins
+            new_coins.update(word for word in words if word not in known_cryptos and (word.endswith("coin") or word.isupper()))
     
     most_common_topics = topics.most_common(10)
     topics_str = "\n".join([f"{topic[0]}: {topic[1]} mentions" for topic in most_common_topics])
-    new_coins_str = ", ".join(new_coins)
+    new_coins_str = ", ".join(sorted(str(coin) for coin in new_coins)[:20])  # Convert to str before sorting
 
     return f"Trending topics:\n{topics_str}\n\nPotential new coins being discussed: {new_coins_str}"
+
 
 def clean_reddit_text(docs: List[str]) -> List[str]:
     """

@@ -20,12 +20,13 @@ logger = logging.getLogger(__name__)
 def register_callbacks(app: Dash):
 
     @app.long_callback(
-        Output("timestamp", "data"),
-        Input("update_button", "n_clicks"),
-        running=[
-            (Output("update_button", "disabled"), True, False),
-            (Output("update_button", "children"), [dbc.Spinner(size="sm"), " Updating..."], "Update Data"),
-        ]
+    Output("timestamp", "data"),
+    Input("update_button", "n_clicks"),
+    running=[
+        (Output("update_button", "disabled"), True, False),
+        (Output("update_button", "children"), [dbc.Spinner(size="sm"), " Updating..."], "Update Data"),
+    ],
+        timeout=300000  # 5 minutes in milliseconds
     )
     def update_data(n_clicks):
         """ 

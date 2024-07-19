@@ -394,6 +394,7 @@ function processResponseData(data) {
     }
 }
 
+
 function handleVisualResponse(content) {
     console.log("Handling visual response:", content);
     if (content && content.status === 'success') {

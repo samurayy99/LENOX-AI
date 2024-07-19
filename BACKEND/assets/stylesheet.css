@@ -4,4 +4,23 @@ span.column-header--sort {
   color: unset !important;
 }
 
+.dashboard-wrapper {
+  margin: 2em 1em 0em 1em;
+}
+
+.dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.mb-3 {
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 991px) {
+  .dashboard-wrapper {
+      margin: 1em 0.5em 0em 0.5em;
+  }
+}
+
 

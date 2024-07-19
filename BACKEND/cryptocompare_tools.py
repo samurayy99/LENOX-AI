@@ -1,12 +1,96 @@
 import os
 import requests
 import json
-from langchain.agents import tool  # Use the @tool decorator for Langchain compatibility
+from typing import Dict, List, TypedDict
+from langchain.agents import tool
+from urllib.parse import urlencode
+import asyncio
+import aiohttp
+from functools import lru_cache
+import time
 
 class APIError(Exception):
     """Custom API Error to handle exceptions from CryptoCompare requests."""
     def __init__(self, status_code, detail):
         super().__init__(f"API Error {status_code}: {detail}")
+        
+        
+class OHLCVData(TypedDict):
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+class RateLimiter:
+    def __init__(self, calls: int, period: float):
+        self.calls = calls
+        self.period = period
+        self.timestamps: List[float] = []
+
+    async def wait(self):
+        now = time.time()
+        self.timestamps = [t for t in self.timestamps if now - t < self.period]
+        if len(self.timestamps) >= self.calls:
+            await asyncio.sleep(self.period - (now - self.timestamps[0]))
+        self.timestamps.append(time.time())
+
+rate_limiter = RateLimiter(calls=50, period=1.0)
+
+@lru_cache(maxsize=100)
+def get_cached_price(symbol: str, currencies: str) -> Dict[str, float]:
+    """
+    Fetches and caches the current price of a specified cryptocurrency in one or more currencies.
+    
+    Args:
+        symbol (str): The cryptocurrency symbol (e.g., 'BTC').
+        currencies (str): Comma-separated list of currency symbols (e.g., 'USD,EUR').
+    
+    Returns:
+        Dict[str, float]: A dictionary of currency symbols to prices.
+    """
+    api_key = os.getenv('CRYPTOCOMPARE_API_KEY')
+    if not api_key:
+        raise ValueError("API key not found. Please set the CRYPTOCOMPARE_API_KEY environment variable.")
+    
+    headers = {'authorization': f'Apikey {api_key}'}
+    url = f"https://min-api.cryptocompare.com/data/price?fsym={symbol}&tsyms={currencies}"
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        raise APIError(response.status_code, str(e))
+
+@tool
+async def get_ohlcv_data(symbol: str, currency: str = 'USD', interval: str = 'day', limit: int = 30) -> List[OHLCVData]:
+    """Fetches OHLCV data for a specified cryptocurrency."""
+    api_key = os.getenv('CRYPTOCOMPARE_API_KEY')
+    headers = {'authorization': f'Apikey {api_key}'} if api_key else {}
+    params = {
+        'fsym': symbol,
+        'tsym': currency,
+        'limit': limit
+    }
+    url = f"https://min-api.cryptocompare.com/data/v2/histo{interval}?{urlencode(params)}"
+    
+    await rate_limiter.wait()
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 429:
+                retry_after = int(response.headers.get('Retry-After', 1))
+                await asyncio.sleep(retry_after)
+                return await get_ohlcv_data(symbol, currency, interval, limit)
+            
+            response.raise_for_status()
+            data = await response.json()
+            
+            if 'Data' not in data or 'Data' not in data['Data']:
+                raise KeyError("Missing 'Data' key in the response.")
+            
+            return [OHLCVData(**item) for item in data['Data']['Data']]
 
 
 @tool
@@ -151,5 +235,3 @@ def get_top_volume_symbols(currency: str = 'USD', limit: int = 10, page: int = 0
         return f"Error: Missing expected data in the response: {str(e)}"
     except requests.RequestException as e:
         raise APIError(response.status_code, str(e))
-
-
