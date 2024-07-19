@@ -342,43 +342,42 @@ function appendVisualizationPlaceholder() {
 }
 
 
-
 function processResponseData(data) {
     console.log("Received data from server:", data);
     try {
+        if (!data || typeof data !== 'object' || !('type' in data)) {
+            throw new Error('Invalid response structure');
+        }
+
         switch (data.type) {
             case 'visualization':
-                if (data.content && typeof data.content === 'object') {
-                    handleVisualResponse(data.content);
-                } else if (typeof data.content === 'string') {
-                    handleVisualResponse(JSON.parse(data.content));
-                } else {
-                    throw new Error('Invalid visualization content structure.');
-                }
+                console.log("Handling visualization response");
+                handleVisualResponse(data);
                 break;
             case 'text':
+                console.log("Handling text response");
                 if (typeof data.content === 'string') {
                     appendMessage(convertUrlsToLinks(data.content), 'bot-message', true);
-                } else if (typeof data.content === 'object' && 'response' in data.content) {
-                    appendMessage(convertUrlsToLinks(data.content.response), 'bot-message', true);
                 } else {
-                    throw new Error('Invalid text response structure.');
+                    throw new Error('Invalid text response structure');
                 }
                 break;
             case 'document_response':
+                console.log("Handling document response");
                 if (Array.isArray(data.content)) {
                     data.content.forEach(doc => {
                         appendMessage(`**Filename:** ${doc.metadata.filename}<br>**Content:** ${doc.page_content}`, 'bot-message');
                     });
                 } else {
-                    throw new Error('Invalid document_response structure.');
+                    throw new Error('Invalid document_response structure');
                 }
                 break;
             case 'chart_analysis':
-                if (typeof data.response === 'object') {
-                    appendMessage(`Chart Analysis: ${JSON.stringify(data.response, null, 2)}`, 'bot-message');
+                console.log("Handling chart analysis response");
+                if (typeof data.content === 'object') {
+                    appendMessage(`Chart Analysis: ${JSON.stringify(data.content, null, 2)}`, 'bot-message');
                 } else {
-                    throw new Error('Invalid chart_analysis structure.');
+                    throw new Error('Invalid chart_analysis structure');
                 }
                 break;
             case 'error':
@@ -395,15 +394,42 @@ function processResponseData(data) {
 }
 
 
-function handleVisualResponse(content) {
-    console.log("Handling visual response:", content);
-    if (content && content.status === 'success') {
-        appendMessage(content.message, 'bot-message');
-    } else {
-        console.error('Unexpected visualization content:', content);
-        appendMessage('An error occurred while processing the visualization response.', 'error-message');
+function handleVisualResponse(response) {
+    console.log("Handling visual response:", response);
+    const chatMessages = document.getElementById('chat-messages');
+
+    if (!chatMessages) {
+        console.error("Element with id 'chat-messages' not found");
+        return;
     }
+
+    // Create a new message container
+    const messageContainer = document.createElement('div');
+    messageContainer.className = 'bot-message';
+
+    // Display the text message
+    const messageElement = document.createElement('p');
+    messageElement.textContent = response.content;
+    messageContainer.appendChild(messageElement);
+
+    // Display the image
+    if (response.image) {
+        const imgElement = document.createElement('img');
+        imgElement.src = response.image;
+        imgElement.alt = 'Visualization';
+        imgElement.style.maxWidth = '100%';
+        messageContainer.appendChild(imgElement);
+    } else {
+        console.log("No image data in response");
+    }
+
+    // Append the new message to the chat
+    chatMessages.appendChild(messageContainer);
+
+    // Scroll to the bottom of the chat
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
 
 
 function convertUrlsToLinks(text) {
@@ -491,4 +517,38 @@ function sendFeedback(query, feedback) {
     .then(response => response.json());
 }
 
+
+function createVisualization(query) {
+    fetch('/create_visualization', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: query }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.type === 'visualization' && data.status === 'success') {
+            // Create an image element and set its source to the base64 data
+            const img = document.createElement('img');
+            img.src = data.image;
+            
+            // Append the image to a container in your HTML
+            document.getElementById('visualization-container').innerHTML = '';
+            document.getElementById('visualization-container').appendChild(img);
+            
+            // Display the message
+            document.getElementById('message-container').textContent = data.message;
+        } else if (data.type === 'text' && data.status === 'success') {
+            // Handle text response
+            document.getElementById('message-container').textContent = data.content;
+        } else {
+            // Handle error
+            console.error('Error:', data.content || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
 

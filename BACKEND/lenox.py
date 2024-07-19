@@ -14,6 +14,7 @@ from intent_detection import IntentDetector, IntentType
 # Import system prompt content from prompts.py
 from prompts import system_prompt_content, PromptEngineConfig, PromptEngine
 import logging  # Use built-in logging module
+from code_interpreter import generate_visualization_response_sync
 
 
 # Initialize logging
@@ -76,9 +77,8 @@ class Lenox:
             ("user", full_prompt),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
-
+        
     
-
     def convchain(self, query: str, session_id: str = "my_session") -> dict:
         if not query:
             return {"type": "text", "content": "Please enter a query."}
@@ -89,7 +89,17 @@ class Lenox:
         detected_intent = self.intent_detector.detect_intent(query)
         logger.debug(f"Detected intent: {detected_intent}")
 
-        # Handle intent
+        # Handle visualization intent
+        if detected_intent == IntentType.VISUALIZATION:
+            try:
+                result = generate_visualization_response_sync(query)
+                logger.debug(f"Visualization result: {result}")
+                return result  # This should already be in the correct format
+            except Exception as e:
+                logger.error(f"Error generating visualization: {e}")
+                return {"type": "error", "content": str(e)}
+
+        # Handle other intents
         if detected_intent != IntentType.GENERAL:
             result = self.intent_detector.handle_intent(detected_intent, query)
             return result  # Assuming handle_intent returns a dict with 'type' and 'content'
@@ -124,7 +134,6 @@ class Lenox:
             output = str(output)
 
         return {"type": "text", "content": output}
-    
     
 
     def construct_prompt(self, query, summarized_history):
@@ -260,6 +269,7 @@ class Lenox:
             logger.info("Applied recent feedback to improve the model")
         except sqlite3.Error as e:
             logger.error(f"Error applying feedback: {e}")
+            
 
     def reinforce_positive_responses(self, queries):
         """

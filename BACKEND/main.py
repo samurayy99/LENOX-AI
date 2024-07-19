@@ -19,7 +19,7 @@ from code_interpreter import generate_visualization_response_sync
 from gpt_research_tools import GPTResearchManager
 import base64
 import os
-import json
+
 
 # Load environment variables
 load_dotenv()
@@ -200,14 +200,22 @@ def handle_query():
         result = lenox.convchain(query, session['session_id'])
         app.logger.debug(f"Processed query with convchain, result: {result}")
 
-        # Ensure the content field is a JSON object only for visualization responses
+        # Handle both text and visualization responses
         if result['type'] == 'visualization':
-            # Replace single quotes with double quotes
-            app.logger.debug("Parsing visualization content")
-            result['content'] = json.loads(result['content'].replace("'", '"'))
+            return jsonify({
+                'type': 'visualization',
+                'status': result['status'],
+                'content': result['message'],
+                'image': result['image']
+            })
+        elif result['type'] == 'text':
+            return jsonify({
+                'type': 'text',
+                'content': result['content']
+            })
+        else:
+            return jsonify({'error': 'Unknown response type.'}), 500
 
-        app.logger.debug("Sending response back to client.")
-        return jsonify(result)
     except Exception as e:
         app.logger.error(f"Error processing request: {str(e)}")
         return jsonify({'error': 'Failed to process request.'}), 500
@@ -256,13 +264,9 @@ def create_visualization():
         result = generate_visualization_response_sync(query)
         app.logger.debug(f"Generated visualization result: {result}")
         return jsonify(result)
-    except ValueError as e:
-        app.logger.error(f"Error generating visualization: {str(e)}")
-        return jsonify({"status": "error", "error": str(e)}), 500
     except Exception as e:
         app.logger.error(f"Unexpected error: {str(e)}")
         return jsonify({"status": "error", "error": "An unexpected error occurred."}), 500
-
 
 
 
