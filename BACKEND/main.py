@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 from documents.documents import ChartAnalyzer
 from lenox import Lenox  # Ensure this imports the updated lenox.py
 from prompts import PromptEngine, PromptEngineConfig
-from werkzeug.utils import secure_filename
 from tool_imports import import_tools
 import whisper
 from dashboards.dashboard import create_dashboard
@@ -21,13 +20,16 @@ import base64
 import os
 
 
+
+
+
 # Load environment variables
 load_dotenv()
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/images'
-whisper_model = whisper.load_model("base")  # Rename the Whisper model for clarity
+whisper_model = whisper.load_model("tiny")
 openai_api_key = os.getenv('OPENAI_API_KEY')
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'my_secret_key')
 app.config['UPLOAD_FOLDER'] = '/Users/lenox27/LENOX/uploaded_documents'
 socketio = SocketIO(app)
@@ -107,33 +109,32 @@ def gpt_research():
 def serve_audio(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
     audio_file = request.files.get('file')
     if not audio_file:
         return jsonify({'error': 'No file provided'}), 400
 
-    # Ensure the filename is not None
-    filename = audio_file.filename
-    if filename:
-        audio_path = secure_filename(filename)
-    else:
-        audio_path = secure_filename("default_filename.wav")
-
-    audio_file.save(os.path.join(app.config['UPLOAD_FOLDER'], audio_path))
-
-    # Perform transcription using the Whisper model
-    result = whisper_model.transcribe(os.path.join(app.config['UPLOAD_FOLDER'], audio_path))
-    transcription = result['text']
-    detected_language = result['language']
-
-    # Clean up the saved file after processing
-    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], audio_path))
-
-    return jsonify({
-        'transcription': transcription,
-        'language': detected_language
-    })
+    try:
+        # Save the file temporarily
+        temp_filename = 'temp_audio.webm'
+        audio_file.save(temp_filename)
+        
+        # Use whisper to transcribe
+        result = whisper_model.transcribe(temp_filename)
+        text = result['text']
+        
+        # Remove the temporary file
+        os.remove(temp_filename)
+        
+        return jsonify({
+            'transcription': text,
+            'language': 'en'
+        })
+    except Exception as e:
+        app.logger.error(f"Error processing audio: {str(e)}")
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 
 @app.route('/upload', methods=['POST'])

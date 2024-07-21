@@ -13,7 +13,7 @@ from coinpaprika_tools import get_coin_details, get_coin_tags, get_market_overvi
 from cryptopanic_tools import get_latest_news, get_news_sources, get_last_news_title
 from coinmarketcap_tools import get_latest_listings, get_crypto_metadata, get_global_metrics
 from fearandgreed_tools import get_fear_and_greed_index
-from whale_alert_tools import get_whale_alert_status, get_recent_large_transactions
+from dune_analytics_tools import get_monthly_dex_volume_by_project, get_nft_market_volume, get_narrative_performance_analysis, get_bitcoin_etf_analysis, get_ethereum_staking_analysis, get_bitcoin_top_holders_analysis, get_dex_volume_results, get_ethereum_daily_activity, get_polygon_gaming_analysis, get_tokenization_market_analysis, get_tokenization_project_analysis, get_memecoin_market_analysis, get_emerging_ai_tokens_analysis
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 from integration_tools import get_current_price, get_historical_prices, comment_on_price
 from integration2_tools import combined_technical_analysis, generate_recommendation
@@ -75,10 +75,21 @@ def import_tools():
         # Fear and Greed Index Tools
         get_fear_and_greed_index,  # Retrieves the Fear and Greed Index for the cryptocurrency market.
 
-        # Whale Alert Tools
-        get_whale_alert_status,  # Retrieves the current status of Whale Alert.
-        get_recent_large_transactions,  # Retrieves recent large transactions in the cryptocurrency market.
-
+        # Dune Analytics Tools
+        get_monthly_dex_volume_by_project,
+        get_nft_market_volume,
+        get_narrative_performance_analysis,
+        get_bitcoin_etf_analysis,
+        get_ethereum_staking_analysis,
+        get_bitcoin_top_holders_analysis,
+        get_dex_volume_results,
+        get_ethereum_daily_activity,
+        get_polygon_gaming_analysis,
+        get_tokenization_market_analysis,
+        get_tokenization_project_analysis,
+        get_memecoin_market_analysis,
+        get_emerging_ai_tokens_analysis,
+        
         # Binance Tools
         get_binance_ticker,  # Retrieves the current ticker price from Binance.
         get_binance_order_book,  # Retrieves the order book for a specified cryptocurrency on Binance.

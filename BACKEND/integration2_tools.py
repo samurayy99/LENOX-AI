@@ -1,14 +1,13 @@
 import logging
-from datetime import datetime, timedelta
 from langchain.tools import tool
 from coingecko_tools import calculate_rsi, calculate_macd
 from fearandgreed_tools import get_fear_and_greed_index
-from whale_alert_tools import get_recent_large_transactions
+
 
 @tool
 def combined_technical_analysis(symbol: str, prices: list, period: int = 14) -> str:
     """
-    Combines RSI, MACD, Fear and Greed Index, and Whale Alert data to provide a comprehensive analysis and recommendation.
+    Combines RSI, MACD, Fear and Greed Index to provide a comprehensive analysis and recommendation.
 
     Args:
     - symbol (str): The trading pair symbol (e.g., 'BTCUSDT').
@@ -28,18 +27,16 @@ def combined_technical_analysis(symbol: str, prices: list, period: int = 14) -> 
         # Get Fear and Greed Index
         fng_result = get_fear_and_greed_index()
         
-        # Get recent whale transactions
-        start_time = int((datetime.now() - timedelta(days=1)).timestamp())
-        whale_transactions = get_recent_large_transactions(start=start_time)
+       
         
         # Combine the results into a comprehensive analysis
         analysis = f"RSI Analysis: {rsi_result}\n\n"
         analysis += f"MACD Analysis: {macd_result}\n\n"
         analysis += f"Fear and Greed Index: {fng_result}\n\n"
-        analysis += f"Recent Whale Transactions: {whale_transactions}\n\n"
+    
         
         # Generate a recommendation based on the analysis
-        recommendation = generate_recommendation(rsi_result, macd_result, fng_result, whale_transactions)
+        recommendation = generate_recommendation(rsi_result, macd_result, fng_result)
         
         return f"{analysis}\nRecommendation: {recommendation}"
     except Exception as e:
@@ -88,8 +85,6 @@ def generate_recommendation(rsi_result: str, macd_result: str, fng_result: str, 
         else:
             recommendation += "- The Fear and Greed Index indicates a neutral market sentiment.\n"
     
-    # Interpret Whale Transactions
-    if "transactions" in whale_transactions:
-        recommendation += "- Recent whale transactions indicate significant market activity. Monitor the market closely for potential large movements.\n"
+    
     
     return recommendation

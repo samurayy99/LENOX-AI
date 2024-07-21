@@ -1,47 +1,72 @@
-document.getElementById('startRecording').addEventListener('click', function () {
+const startRecordingButton = document.getElementById('startRecording');
+const stopRecordingButton = document.getElementById('stopRecording');
+const queryInput = document.getElementById('query');
+
+let mediaRecorder;
+let audioChunks = [];
+
+function startRecording() {
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
-            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-            let audioChunks = [];
-            mediaRecorder.ondataavailable = function (event) {
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = event => {
                 audioChunks.push(event.data);
             };
 
-            mediaRecorder.onstop = async function () {
+            mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                const formData = new FormData();
-                formData.append('file', audioBlob, 'recording.webm');
-
-                try {
-                    const response = await fetch('/transcribe', {
-                        method: 'POST',
-                        body: formData,
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        document.getElementById('query').value = data.transcription;
-                    } else {
-                        console.error('Failed to transcribe audio:', await response.text());
-                    }
-                    audioChunks = [];
-                } catch (error) {
-                    console.error('Error:', error);
-                }
+                await transcribeAudio(audioBlob);
+                stream.getTracks().forEach(track => track.stop());
             };
 
-            document.getElementById('stopRecording').addEventListener('click', function () {
-                mediaRecorder.stop();
-                stream.getTracks().forEach(track => track.stop());
-                document.getElementById('stopRecording').disabled = true;
-            });
-
-            document.getElementById('stopRecording').disabled = false;
+            stopRecordingButton.disabled = false;
+            startRecordingButton.disabled = true;
             mediaRecorder.start();
         })
-        .catch(error => console.error('Permission denied or microphone not available:', error));
-});
+        .catch(error => {
+            console.error('Permission denied or microphone not available:', error);
+            alert('Unable to access the microphone. Please check your browser settings.');
+        });
+}
 
-document.getElementById('startRecording').disabled = false;
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        stopRecordingButton.disabled = true;
+        startRecordingButton.disabled = false;
+    }
+}
+
+async function transcribeAudio(audioBlob) {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'recording.webm');
+
+    try {
+        const response = await fetch('/transcribe', {
+            method: 'POST',
+            body: formData,
+        });
+        if (response.ok) {
+            const data = await response.json();
+            queryInput.value = data.transcription;
+        } else {
+            const errorText = await response.text();
+            console.error('Failed to transcribe audio:', response.status, errorText);
+            alert(`Failed to transcribe audio. Status: ${response.status}`);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert(`Network error: ${error.message}`);
+    } finally {
+        audioChunks = [];
+        startRecordingButton.disabled = false;
+    }
+}
+
+startRecordingButton.addEventListener('click', startRecording);
+stopRecordingButton.addEventListener('click', stopRecording);
+
 
 document.getElementById('sendButton').addEventListener('click', async () => {
     await submitQuery();
