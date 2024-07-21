@@ -576,4 +576,3 @@ function createVisualization(query) {
         console.error('Error:', error);
     });
 }
-

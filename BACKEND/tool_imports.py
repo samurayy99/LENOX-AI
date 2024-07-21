@@ -13,7 +13,7 @@ from coinpaprika_tools import get_coin_details, get_coin_tags, get_market_overvi
 from cryptopanic_tools import get_latest_news, get_news_sources, get_last_news_title
 from coinmarketcap_tools import get_latest_listings, get_crypto_metadata, get_global_metrics
 from fearandgreed_tools import get_fear_and_greed_index
-from dune_analytics_tools import get_monthly_dex_volume_by_project, get_nft_market_volume, get_narrative_performance_analysis, get_bitcoin_etf_analysis, get_ethereum_staking_analysis, get_bitcoin_top_holders_analysis, get_dex_volume_results, get_ethereum_daily_activity, get_polygon_gaming_analysis, get_tokenization_market_analysis, get_tokenization_project_analysis, get_memecoin_market_analysis, get_emerging_ai_tokens_analysis
+from dune_analytics_tools import get_monthly_dex_volume_by_project, get_nft_market_volume, get_sector_performance_analysis_24h, get_sector_performance_analysis_7d, get_sector_performance_analysis_30d, get_bitcoin_etf_analysis, get_ethereum_staking_analysis, get_bitcoin_top_holders_analysis, get_dex_volume_results, get_ethereum_daily_activity, get_polygon_gaming_analysis, get_tokenization_market_analysis, get_tokenization_project_analysis, get_memecoin_market_analysis, get_emerging_ai_tokens_analysis, get_crypto_category_performance, get_stablecoin_market_analysis, get_farcaster_token_mentions_analysis, get_top_nft_collections_ranking
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
 from integration_tools import get_current_price, get_historical_prices, comment_on_price
 from integration2_tools import combined_technical_analysis, generate_recommendation
@@ -78,7 +78,9 @@ def import_tools():
         # Dune Analytics Tools
         get_monthly_dex_volume_by_project,
         get_nft_market_volume,
-        get_narrative_performance_analysis,
+        get_sector_performance_analysis_24h,
+        get_sector_performance_analysis_7d,
+        get_sector_performance_analysis_30d,
         get_bitcoin_etf_analysis,
         get_ethereum_staking_analysis,
         get_bitcoin_top_holders_analysis,
@@ -89,6 +91,10 @@ def import_tools():
         get_tokenization_project_analysis,
         get_memecoin_market_analysis,
         get_emerging_ai_tokens_analysis,
+        get_crypto_category_performance,
+        get_stablecoin_market_analysis,
+        get_farcaster_token_mentions_analysis,
+        get_top_nft_collections_ranking,
         
         # Binance Tools
         get_binance_ticker,  # Retrieves the current ticker price from Binance.
