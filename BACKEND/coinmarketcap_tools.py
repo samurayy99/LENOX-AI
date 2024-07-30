@@ -30,22 +30,24 @@ class CoinMarketCapAPI:
 
 cmc_api = CoinMarketCapAPI()
 
+
 @tool
 def get_latest_listings(start=1, limit=10, convert='USD'):
     """
-    Get the latest cryptocurrency listings.
+    Get the latest newly added cryptocurrency listings.
     Args:
     - start (int): Starting point of the listings.
     - limit (int): Number of listings to retrieve.
     - convert (str): The fiat or cryptocurrency to convert the listings to.
     """
-    endpoint = 'cryptocurrency/listings/latest'
+    endpoint = 'cryptocurrency/listings/new'
     parameters = {
         'start': start,
         'limit': limit,
         'convert': convert
     }
     return cmc_api.make_request(endpoint, parameters)
+
 
 @tool
 def get_crypto_metadata(crypto_id):

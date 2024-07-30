@@ -126,15 +126,14 @@ function processResponseData(data) {
                 const content = JSON.parse(data.content.replace(/'/g, '"'));
                 appendMessage(content.message, 'bot-message');
                 break;
-            case 'text':
-                if (typeof data.content === 'string') {
-                    appendMessage(convertUrlsToLinks(data.content), 'bot-message', true);
-                } else if (typeof data.content === 'object' && 'response' in data.content) {
-                    appendMessage(convertUrlsToLinks(data.content.response), 'bot-message', true);
-                } else {
-                    throw new Error('Invalid text response structure.');
-                }
-                break;
+                case 'text':
+                    if (typeof data.content === 'string') {
+                        let cleanContent = data.content.replace(/^content=/, '').replace(/\\n/g, '\n');
+                        appendMessage(convertUrlsToLinks(cleanContent), 'bot-message', true);
+                    } else {
+                        throw new Error('Invalid text response structure');
+                    }
+                    break;
             case 'document_response':
                 if (Array.isArray(data.content)) {
                     data.content.forEach(doc => {

@@ -111,17 +111,40 @@ def get_cryptocompare_current_price(symbol: str, currencies: str = 'USD') -> str
 
 
 @tool
-def get_latest_social_stats(coin_symbol: str) -> str:
-    """Retrieves the latest social statistics for a given cryptocurrency symbol."""
+def get_latest_social_stats(coin_identifier: str) -> str:
+    """Retrieves the latest social statistics for a given cryptocurrency symbol or ID."""
     api_key = os.getenv('CRYPTOCOMPARE_API_KEY')
     headers = {'authorization': f'Apikey {api_key}'} if api_key else {}
-    url = f"https://min-api.cryptocompare.com/data/social/coin/latest?fsym={coin_symbol}"
+    
+    # Check if the input is a number (ID) or string (symbol)
+    if coin_identifier.isdigit():
+        url = f"https://min-api.cryptocompare.com/data/social/coin/latest?coinId={coin_identifier}"
+    else:
+        # If it's a symbol, we need to first get the coinId
+        symbol_url = f"https://min-api.cryptocompare.com/data/coin/generalinfo?fsyms={coin_identifier.upper()}&tsym=USD"
+        try:
+            symbol_response = requests.get(symbol_url, headers=headers)
+            symbol_response.raise_for_status()
+            symbol_data = symbol_response.json()
+            if 'Data' in symbol_data and symbol_data['Data']:
+                coin_id = symbol_data['Data'][0]['CoinInfo']['Id']
+                url = f"https://min-api.cryptocompare.com/data/social/coin/latest?coinId={coin_id}"
+            else:
+                return f"Error: Could not find coin ID for symbol {coin_identifier}"
+        except requests.RequestException as e:
+            raise APIError(symbol_response.status_code, str(e))
+    
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
-        coin_url = f"https://www.cryptocompare.com/coins/{coin_symbol}/overview"
-        return f"Latest social stats for {coin_symbol}: {data}. More details at: {coin_url}"
+        if 'Data' in data:
+            coin_symbol = data['Data'].get('General', {}).get('Name', 'Unknown')
+            coin_id = data['Data'].get('General', {}).get('Id', 'Unknown')
+            coin_url = f"https://www.cryptocompare.com/coins/{coin_symbol.lower()}/overview"
+            return f"Latest social stats for {coin_symbol} (ID: {coin_id}): {data['Data']}. More details at: {coin_url}"
+        else:
+            return f"Error: No data found for coin {coin_identifier}"
     except requests.RequestException as e:
         raise APIError(response.status_code, str(e))
 

@@ -1,13 +1,14 @@
-from typing import List
+from typing import List, Optional
 from langchain.agents import tool
 from langchain_openai import OpenAI
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.document_loaders import YoutubeLoader
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from langchain.chains.question_answering import load_qa_chain
 import scrapetube
 import logging
+from youtube_transcript_api import YouTubeTranscriptApi
+from pytube import YouTube
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -55,37 +56,81 @@ def process_youtube_video(url: str) -> List[Document]:
     """
     try:
         logger.debug(f"Processing YouTube video URL: {url}")
-        loader = YoutubeLoader.from_youtube_url(url, add_video_info=True)
-        documents = loader.load()
-        logger.debug(f"Loaded documents: {documents}")
-        return documents
+        
+        # Extract video ID from URL
+        video_id = url.split("v=")[1] if "v=" in url else url.split("/")[-1]
+        
+        # Get video info
+        yt = YouTube(url)
+        title = yt.title
+        description = yt.description
+        
+        # Get transcript
+        transcript = YouTubeTranscriptApi.get_transcript(video_id)
+        transcript_text = " ".join([entry['text'] for entry in transcript])
+        
+        # Create document
+        document = Document(
+            page_content=f"Title: {title}\n\nDescription: {description}\n\nTranscript: {transcript_text}",
+            metadata={"source": url, "title": title}
+        )
+        
+        logger.debug(f"Processed video: {title}")
+        return [document]
     except Exception as e:
         logger.error(f"Error processing YouTube video: {str(e)}")
-        return [Document(page_content=str(e), metadata={})]
+        return [Document(page_content=f"Error processing video: {str(e)}", metadata={"source": url})]
+
+
 
 @tool
-def query_youtube_video(url: str, question: str) -> str:
+def query_youtube_video(url_or_query: str, question: Optional[str] = None) -> str:
     """
     Performs a question-answering query on the content of a YouTube video.
+    If a query is provided instead of a URL, it first searches for the video.
 
     Args:
-        url (str): The URL of the YouTube video.
-        question (str): The question to ask about the video content.
+        url_or_query (str): The URL of the YouTube video or a search query.
+        question (Optional[str]): The question to ask about the video content. If None, summarize the video.
 
     Returns:
-        str: The answer to the question based on the video content.
+        str: The answer to the question based on the video content or search results.
     """
     try:
-        logger.debug(f"Querying YouTube video URL: {url} with question: {question}")
+        url: Optional[str] = None
+        formatted_results: Optional[str] = None
+
+        if not url_or_query.startswith('http'):
+            # This is a search query
+            search_results = search_youtube(url_or_query)
+            formatted_results = search_results
+            url = search_results.split('\n')[1].split(': ')[1] if search_results != "No videos found." else None
+            if not url:
+                return f"Search results:\n\n{formatted_results}\n\nNo videos found to analyze."
+            logger.debug(f"Search results:\n{formatted_results}")
+            logger.debug(f"Analyzing first video: {url}")
+        else:
+            url = url_or_query
+
+        if url is None:
+            return "Error: No valid URL found to analyze."
+
         documents = process_youtube_video(url)
         if not documents or "Error" in documents[0].page_content:
-            return "Failed to retrieve video content."
+            return f"Failed to retrieve video content for URL: {url}"
 
         llm = OpenAI(temperature=0)
         chain = load_qa_chain(llm, chain_type="default")
+        if question is None:
+            question = "Summarize the main points of this video."
         output = chain.run(input_documents=documents, question=question)
-        logger.debug(f"Query result: {output}")
-        return output
+        
+        response = f"Video URL: {url}\n\n"
+        if formatted_results:
+            response += f"Search results:\n\n{formatted_results}\n\n"
+        response += f"Analysis:\n{output}"
+        
+        return response
     except Exception as e:
         logger.error(f"Error querying YouTube video: {str(e)}")
         return f"Error querying YouTube video: {str(e)}"
@@ -100,6 +145,8 @@ class YouTubeQA:
         self.embeddings = OpenAIEmbeddings()
         self.db = None  # Placeholder for Chroma instance
         self.chain = None  # Placeholder for QA chain
+        
+        
 
     @tool
     def ingest_video(self, url: str) -> str:

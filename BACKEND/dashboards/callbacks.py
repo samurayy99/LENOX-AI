@@ -57,7 +57,6 @@ def register_callbacks(app: Dash):
         Input("radio_trend", "value"),
         prevent_initial_call=True,
     )
-    
     def update_trend_table(timestamp, filter):
         """ Update the data table of the uptrend screener whenever the data was updated or another filter was selected. """
         try:
@@ -84,8 +83,14 @@ def register_callbacks(app: Dash):
 
             # Select only the required columns
             df = df[required_columns]
-            data = df.to_dict(orient="records")
-            logging.debug(f"Data to be returned: {data}")
+            
+            # Convert to records, handling potential errors
+            if df.empty:
+                logging.warning("DataFrame is empty after filtering")
+                return []
+            
+            data = df.to_dict(orient="records")  # type: ignore
+            logging.debug(f"Data to be returned: {data[:5]}") # Log only first 5 records to avoid excessive logging
             return data
         except Exception as e:
             logging.error(f"Error in update_trend_table: {e}")

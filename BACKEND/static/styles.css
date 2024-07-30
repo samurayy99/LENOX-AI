@@ -65,15 +65,17 @@ html {
   margin-bottom: 5px;
 }
 
+
+
 /* Chat Input Container */
 .chat-input-container {
   display: flex;
   align-items: center;
-  padding: 0; /* Remove padding */
+  padding: 2px; /* Further reduced padding */
   margin: 0; /* Remove margin */
   background-color: #add8e6;
   border-top: 2px solid #b0c4de;
-  flex-direction: column;
+  flex-direction: row; /* Changed to row */
   gap: 5px;
 }
 
@@ -88,8 +90,8 @@ html {
   width: 100%;
   flex-grow: 1;
   font-size: 16px;
-  padding: 12px;
-  border-radius: 20px;
+  padding: 4px; /* Further reduced padding */
+  border-radius: 5px; /* Further reduced border radius */
   border: 2px solid #b0c4de;
   resize: none;
   overflow: auto;
@@ -101,10 +103,10 @@ html {
 button {
   background-color: #add8e6;
   border: 1px solid #b0c4de;
-  padding: 5px 10px;
-  margin: 5px 0;
+  padding: 3px 5px; /* Further reduced padding */
+  margin: 0; /* Remove margin */
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: 3px; /* Further reduced border radius */
 }
 
 button:hover {
@@ -113,19 +115,21 @@ button:hover {
 
 /* Upload Container and Form */
 .upload-container {
-  padding: 5px;
+  padding: 2px; /* Further reduced padding */
   background-color: #add8e6;
   border-top: 2px solid #b0c4de;
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* Changed to row */
   gap: 5px;
 }
 
 .upload-container label,
 .upload-container input,
 .upload-container button {
-  width: 100%;
+  width: auto; /* Adjusted width */
 }
+
+
 
 /* Loading Indicator */
 .loading-indicator {
@@ -269,18 +273,21 @@ button:hover {
   position: absolute;
   background-color: #f0f5fc;
   border: 1px solid #b0c4de;
-  padding: 5px; /* Reduced padding */
-  border-radius: 10px; /* Reduced border radius */
+  padding: 10px; /* Increased padding */
+  border-radius: 10px;
   z-index: 1;
   overflow-y: auto;
-  max-height: 300px;
+  max-height: 400px; /* Increased max-height */
+  width: 300px; /* Set a fixed width */
+  right: 0; /* Align to the right side of the dropdown button */
 }
 
 .dropdown-content a {
   color: #000;
-  padding: 5px 10px; /* Reduced padding */
+  padding: 8px 12px; /* Increased padding */
   display: block;
-  font-size: 12px; /* Reduced font size */
+  font-size: 14px; /* Increased font size */
+  line-height: 1.4; /* Added line height for better readability */
 }
 
 .dropdown-content a:hover {
@@ -310,6 +317,7 @@ button:hover {
   flex-shrink: 0;
   height: auto; /* Ensure the height is auto */
   margin: 0; /* Ensure no margin */
+  position: relative; /* Added to ensure proper positioning of dropdown */
 }
 
 .chat-logo {
@@ -406,25 +414,4 @@ button:hover {
 
 .play-button:hover {
   background-color: #b0c4de;
-}
-
-.markdown-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1em;
-}
-
-.markdown-table th, .markdown-table td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-}
-
-.markdown-table th {
-  background-color: #f2f2f2;
-  font-weight: bold;
-}
-
-.markdown-table tr:nth-child(even) {
-  background-color: #f9f9f9;
 }

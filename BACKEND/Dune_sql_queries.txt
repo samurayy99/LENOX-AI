@@ -1,0 +1,1219 @@
+SQL queries of the functionalities in the file dune_analytics_tools.py
+------------------------------------------------------------------------
+
+```
+get_dex_volume_results
+
+-- part of a query repo
+-- query name: DEX by volume 🏦
+-- query link: https://dune.com/queries/4319
+
+
+WITH
+  seven_day_volume AS (
+    SELECT
+      project AS "Project",
+      SUM(CAST(amount_usd AS DOUBLE)) AS usd_volume
+    FROM
+      dex."trades" AS t
+    WHERE
+      block_time > NOW() - INTERVAL '7' day
+    GROUP BY
+      1
+  ),
+  one_day_volume AS (
+    SELECT
+      project AS "Project",
+      SUM(CAST(amount_usd AS DOUBLE)) AS usd_volume
+    FROM
+      dex."trades" AS t
+    WHERE
+      block_time > NOW() - INTERVAL '1' day
+    GROUP BY
+      1
+  )
+SELECT
+  ROW_NUMBER() OVER (
+    ORDER BY
+      SUM(seven.usd_volume) DESC NULLS FIRST
+  ) AS "Rank",
+  seven."Project",
+  SUM(seven.usd_volume) AS "7 Days Volume",
+  SUM(one.usd_volume) AS "24 Hours Volume"
+FROM
+  seven_day_volume AS seven
+  LEFT JOIN one_day_volume AS one ON seven."Project" = one."Project"
+WHERE
+  NOT seven.usd_volume IS NULL
+GROUP BY
+  2
+ORDER BY
+  3 DESC NULLS FIRST
+```
+
+```
+get_ethereum_daily_activity
+
+SELECT  
+--truncate time to day
+date_trunc('day', block_time) AS time,
+-- count distinct addresses that signed a transactions
+COUNT(distinct "from") AS active_users,
+-- count distinct addresses that received a transaction
+COUNT(distinct "to") AS receiving_addresses
+FROM ethereum.transactions
+WHERE block_time > DATE '2023-01-01'
+GROUP BY 1
+```
+
+```
+get_monthly_dex_volume_by_project
+
+-- part of a query repo
+-- query name: Monthly DEX Volume By Project
+-- query link: https://dune.com/queries/1847
+
+
+SELECT
+  project,
+  DATE_TRUNC('month', block_time),
+  SUM(CAST(amount_usd AS DOUBLE)) AS usd_volume
+FROM
+  dex."trades" AS t
+WHERE
+ block_time > CAST('2019-01-01' AS TIMESTAMP)
+GROUP BY
+  1,
+  2
+```
+
+```
+get_nft_market_volume
+
+WITH daily_volume AS (
+  SELECT
+    DATE_TRUNC('day', block_time) AS date,
+    aggregator_name AS platform,
+    SUM(amount_usd) AS volume_usd,
+    COUNT(DISTINCT seller) AS unique_sellers,
+    COUNT(DISTINCT buyer) AS unique_buyers
+  FROM nft.trades
+  WHERE
+    block_time >= CURRENT_TIMESTAMP - INTERVAL '90' DAY
+  GROUP BY
+    DATE_TRUNC('day', block_time),
+    aggregator_name
+), weekly_volume AS (
+  SELECT
+    DATE_TRUNC('week', block_time) AS date,
+    aggregator_name AS platform,
+    SUM(amount_usd) AS volume_usd,
+    COUNT(DISTINCT seller) AS unique_sellers,
+    COUNT(DISTINCT buyer) AS unique_buyers
+  FROM nft.trades
+  WHERE
+    block_time >= CURRENT_TIMESTAMP - INTERVAL '365' DAY
+  GROUP BY
+    DATE_TRUNC('week', block_time),
+    aggregator_name
+)
+SELECT
+  'daily' AS period,
+  *
+FROM daily_volume
+UNION ALL
+SELECT
+  'weekly' AS period,
+  *
+FROM weekly_volume
+ORDER BY
+  date DESC,
+  volume_usd DESC
+```
+
+```
+get_sector_performance_analysis_24h
+
+with
+relative_strategy as (
+    SELECT
+        narrative
+        , price_growth
+        , btc_growth
+        , CASE WHEN btc_growth < 0 THEN ((price_growth/btc_growth)*-1)
+        ELSE (price_growth/btc_growth)
+      END AS relative_strategy
+    FROM 
+        (
+      SELECT * FROM query_3594576 -- subset 1
+      UNION ALL
+      SELECT * FROM dune.dyorcrypto.result_narrative_price_growth_subset_2 -- subset 2
+    )
+)
+, mean_of_all_narrative AS (
+    SELECT
+      narrative
+      , price_growth
+      , APPROX_PERCENTILE(price_growth,0.5) OVER() AS mean_of_all_narrative
+      , price_growth / APPROX_PERCENTILE(price_growth,0.5) OVER() AS relative_strength 
+    FROM 
+    (
+      SELECT * FROM query_3594576 -- subset 1
+      UNION ALL
+      SELECT * FROM dune.dyorcrypto.result_narrative_price_growth_subset_2 -- subset 2
+    )
+)
+, relative_strength AS (
+    SELECT
+      narrative
+      , a.price_growth
+      , b.relative_strategy
+      , CASE WHEN mean_of_all_narrative = 0 THEN a.price_growth/(mean_of_all_narrative + 1 )
+        WHEN mean_of_all_narrative < 0 THEN (relative_strength *-1 )
+        ELSE (relative_strength)
+      END AS relative_strength
+    FROM mean_of_all_narrative a
+    LEFT JOIN relative_strategy b using(narrative)
+)
+SELECT
+  narrative
+  , price_growth
+  , relative_strategy
+  , relative_strength
+  , (relative_strength + relative_strategy)/2 as optimized_relative_strength
+  , CASE WHEN (relative_strength + relative_strategy)/2 > 1 THEN 'Leading'
+    ELSE 'Lagging'
+  END AS signal
+--   , APPROX_PERCENTILE(relative_strength,0.5) OVER() AS optimized_relative_strength
+--   , CASE WHEN APPROX_PERCENTILE(relative_strength,0.5) OVER() > 1 THEN 'Leading'
+--       ELSE 'Lagging'
+--   END AS signal
+FROM relative_strength
+ORDER BY 4 DESC
+```
+
+```
+get_sector_performance_analysis_7d
+
+with
+relative_strategy as (
+    SELECT
+        narrative
+        , price_growth
+        , btc_growth
+        , CASE WHEN btc_growth < 0 THEN ((price_growth/btc_growth)*-1)
+        ELSE (price_growth/btc_growth)
+      END AS relative_strategy
+    FROM 
+    (
+      SELECT * FROM query_3595940 -- subset 1
+      UNION ALL
+      SELECT * FROM dune.dyorcrypto.result_7_d_narrative_price_growth_subset_2 -- subset 2
+    )
+)
+, mean_of_all_narrative AS (
+    SELECT
+      narrative
+      , price_growth
+      , APPROX_PERCENTILE(price_growth,0.5) OVER() AS mean_of_all_narrative
+      , (price_growth / APPROX_PERCENTILE(price_growth,0.5) OVER()) AS relative_strength 
+    FROM 
+    (
+      SELECT * FROM query_3595940 -- subset 1
+      UNION ALL
+      SELECT * FROM dune.dyorcrypto.result_7_d_narrative_price_growth_subset_2 -- subset 2
+    )
+)
+, relative_strength AS (
+    SELECT
+      narrative
+      , a.price_growth
+      , b.relative_strategy
+      , CASE WHEN mean_of_all_narrative = 0 THEN a.price_growth/(mean_of_all_narrative + 1 )
+        WHEN mean_of_all_narrative < 0 THEN (relative_strength *-1 )
+        ELSE (relative_strength)
+      END AS relative_strength
+    FROM mean_of_all_narrative a
+    LEFT JOIN relative_strategy b using(narrative)
+)
+SELECT
+  narrative
+  , price_growth
+  , relative_strategy
+  , relative_strength
+  , (relative_strength + relative_strategy)/2 as optimized_relative_strength
+  , CASE WHEN (relative_strength + relative_strategy)/2 > 1 THEN 'Leading'
+    ELSE 'Lagging'
+  END AS signal
+--   , APPROX_PERCENTILE(relative_strength,0.5) OVER() AS optimized_relative_strength
+--   , CASE WHEN APPROX_PERCENTILE(relative_strength,0.5) OVER() > 1 THEN 'Leading'
+--       ELSE 'Lagging'
+--   END AS signal
+FROM relative_strength
+ORDER BY 4 DESC
+```
+
+```
+get_sector_performance_analysis_30d
+
+with
+relative_strategy as (
+    SELECT
+        narrative
+        , price_growth
+        , btc_growth
+        , CASE WHEN btc_growth < 0 THEN ((price_growth/btc_growth)*-1)
+        ELSE (price_growth/btc_growth)
+      END AS relative_strategy
+    FROM 
+    (
+      SELECT * FROM query_3600188 -- subset 1
+      UNION ALL
+      SELECT * FROM dune.dyorcrypto.result_30_d_narrative_price_growth_subset_2 -- subset 2
+    )
+)
+, mean_of_all_narrative AS (
+    SELECT
+      narrative
+      , price_growth
+      , APPROX_PERCENTILE(price_growth,0.5) OVER() AS mean_of_all_narrative
+      , (price_growth / APPROX_PERCENTILE(price_growth,0.5) OVER()) AS relative_strength 
+    FROM 
+    (
+      SELECT * FROM query_3600188 -- subset 1
+      UNION ALL
+      SELECT * FROM dune.dyorcrypto.result_30_d_narrative_price_growth_subset_2 -- subset 2
+    )
+)
+, relative_strength AS (
+    SELECT
+      narrative
+      , a.price_growth
+      , b.relative_strategy
+      , CASE WHEN mean_of_all_narrative = 0 THEN a.price_growth/(mean_of_all_narrative + 1 )
+        WHEN mean_of_all_narrative < 0 THEN (relative_strength *-1 )
+        ELSE (relative_strength)
+      END AS relative_strength
+    FROM mean_of_all_narrative a
+    LEFT JOIN relative_strategy b using(narrative)
+)
+SELECT
+  narrative
+  , price_growth
+  , relative_strategy
+  , relative_strength
+  , (relative_strength + relative_strategy)/2 as optimized_relative_strength
+  , CASE WHEN (relative_strength + relative_strategy)/2 > 1 THEN 'Leading'
+    ELSE 'Lagging'
+  END AS signal  
+--   , APPROX_PERCENTILE(relative_strength,0.5) OVER() AS optimized_relative_strength
+--   , CASE WHEN APPROX_PERCENTILE(relative_strength,0.5) OVER() > 1 THEN 'Leading'
+--       ELSE 'Lagging'
+--   END AS signal
+FROM relative_strength
+ORDER BY 4 DESC
+```
+
+```
+get_bitcoin_etf_analysis
+
+WITH base_info AS (
+    SELECT plain_issuer, issuer, etf_ticker, percentage_fee, address_source
+    FROM (VALUES
+        ('Grayscale', get_href('https://etfs.grayscale.com/gbtc', 'Grayscale'), 'GBTC', 0.015, get_href('https://platform.arkhamintelligence.com/explorer/entity/grayscale', '🟠'))
+        , ('BlackRock', get_href('https://www.blackrock.com/us/financial-professionals/investment-strategies/bitcoin-investing', 'BlackRock'), 'IBIT', 0.0025, get_href('https://platform.arkhamintelligence.com/explorer/entity/blackrock', '🟠'))
+        , ('Fidelity', get_href('https://www.fidelity.com/etfs/fbtc', 'Fidelity'), 'FBTC', 0.0025, get_href('https://platform.arkhamintelligence.com/explorer/entity/fidelity', '🟠'))
+        , ('21Shares', get_href('https://21shares.com/en-US/product/ARKB', '21Shares'), 'ARKB', 0.0021, get_href('https://platform.arkhamintelligence.com/explorer/entity/ark-invest', '🟠') || ' ' || get_href('https://data.chain.link/feeds/ethereum/mainnet/arkb-por', '🔵'))
+        , ('Bitwise', get_href('https://bitbetf.com/', 'Bitwise'), 'BITB', 0.002, get_href('https://bitbetf.com/', '🟢'))
+        , ('Invesco', get_href('https://www.invesco.com/us/en/etf/galaxy-bitcoin-btco.html', 'Invesco'), 'BTCO', 0.0025, get_href('https://platform.arkhamintelligence.com/explorer/entity/invesco', '🟠'))
+        , ('VanEck', get_href('https://www.vaneck.com/us/en/investments/bitcoin-trust-hodl/overview/', 'VanEck'), 'HODL', 0.0025, get_href('https://platform.arkhamintelligence.com/explorer/entity/vaneck', '🟠'))
+        , ('Valkyrie', get_href('https://valkyrieinvest.com/brrr/', 'Valkyrie'), 'BRRR', 0.0025, get_href('https://platform.arkhamintelligence.com/explorer/entity/valkyrie', '🟠'))
+        , ('Franklin Templeton', get_href('https://www.franklintempleton.com/strategies/bitcoin-etf', 'Franklin Templeton'), 'EZBC', 0.0019, get_href('https://platform.arkhamintelligence.com/explorer/entity/franklin-templeton', '🟠'))
+        , ('WisdomTree', get_href('https://www.wisdomtree.com/investments/etfs/crypto/btcw', 'WisdomTree'), 'BTCW', 0.0030, get_href('https://platform.arkhamintelligence.com/explorer/entity/wisdomtree', '🟠'))
+        ) AS t(plain_issuer, issuer, etf_ticker, percentage_fee, address_source)
+    ORDER BY address_source, percentage_fee DESC
+    )
+
+, tvl AS (
+    SELECT f.issuer
+    , f.etf_ticker
+    , SUM(f.amount) AS tvl
+    FROM (
+        SELECT i.block_time
+        , issuer
+        , etf_ticker
+        , 'deposit' AS flow_type
+        , CASE WHEN inverse_values THEN -i.value ELSE i.value END AS amount
+        FROM bitcoin.outputs i
+        INNER JOIN query_3378085 -- Known ETF address list
+            a ON a.address=i.address
+            AND a.track_inflow
+        WHERE i.value > 0
+        AND i.block_time > date('2019-07-24')
+        AND i.block_time <= (SELECT time_limit FROM query_3433379)
+        
+        UNION ALL
+        
+        SELECT i.block_time
+        , issuer
+        , etf_ticker
+        , 'withdrawal' AS flow_type
+        , CASE WHEN inverse_values THEN i.value ELSE -i.value END AS amount
+        FROM bitcoin.inputs i
+        INNER JOIN query_3378085 -- Known ETF address list
+            a ON a.address=i.address
+            AND a.track_outflow
+        WHERE i.value > 0
+        AND i.block_time > date('2019-07-24')
+        AND i.block_time <= (SELECT time_limit FROM query_3433379)
+        ) f
+    GROUP BY 1, 2
+    )
+
+, totals AS (
+    SELECT bi.plain_issuer
+    , bi.issuer
+    , COALESCE(CAST(t.tvl AS varchar), '⁉️') AS tvl
+    , CAST(t.tvl AS double) AS tvl_double
+    , t.tvl*pu.price AS usd_value
+    --, COALESCE(CAST(t.usd_value AS varchar), '⁉️') AS usd_value
+    , bi.etf_ticker
+    , bi.percentage_fee
+    , bi.address_source
+    FROM base_info bi
+    LEFT JOIN tvl t ON t.etf_ticker=bi.etf_ticker
+    LEFT JOIN prices.usd_latest pu ON pu.blockchain IS NULL
+        AND pu.symbol = 'BTC'
+    ORDER BY t.tvl DESC, bi.address_source
+    )
+
+SELECT plain_issuer
+, issuer
+, tvl
+, usd_value
+, CASE WHEN tvl != '⁉️' THEN tvl_double/(SELECT SUM(tvl_double) FROM totals) ELSE NULL END AS percentage_of_total
+, etf_ticker
+, percentage_fee
+, address_source
+FROM totals
+ORDER BY tvl_double DESC, address_source
+```
+
+```
+get_ethereum_staking_analysis
+
+WITH withdrawals AS (
+    SELECT w.block_time
+    , CASE WHEN amount/1e9 BETWEEN 20 AND 32 THEN amount/1e9 WHEN amount/1e9 > 32 THEN 32 ELSE 0 END AS withdrawn_principal
+    , CASE WHEN amount/1e9 < 20 THEN amount/1e9 WHEN amount/1e9 > 32 THEN (amount/1e9)-32 ELSE 0 END AS withdrawn_rewards
+    , w.amount/1e9 AS total_withdrawn
+    , w.address
+    , w.validator_index
+    , CASE WHEN idx.entity = 'Abyss Finance' THEN NULL ELSE idx.entity END AS withdrawing_entity
+    , idx.entity_category AS withdrawing_entity_category
+    FROM ethereum.withdrawals w
+    INNER JOIN query_2364548 idx ON w.validator_index=idx.validator_index
+    WHERE w.block_time > NOW() - interval '3' month
+    )
+
+, inflow AS (
+    SELECT CASE WHEN entity IS NOT NULL AND entity != 'Abyss Finance' THEN ROW_NUMBER() OVER (ORDER BY SUM(amount_staked) DESC) END AS ranking
+    , entity
+    , SUM(amount_staked) AS eth_inflow
+    FROM staking_ethereum.deposits
+    WHERE block_time > NOW() - interval '3' month
+    GROUP BY 2
+    )
+
+, outflow AS (
+    SELECT CASE WHEN withdrawing_entity IS NOT NULL THEN ROW_NUMBER() OVER(ORDER BY SUM(total_withdrawn) DESC) END AS ranking
+    , withdrawing_entity AS entity
+    , SUM(total_withdrawn) AS eth_outflow
+    , SUM(withdrawn_principal) AS eth_principal_outflow
+    , SUM(withdrawn_rewards) AS eth_rewards_outflow
+    FROM withdrawals
+    WHERE total_withdrawn > 0
+    GROUP BY 2
+    )
+
+SELECT CASE WHEN d.entity = 'Kiln' THEN get_href('https://x.com/Kiln_finance', d.entity)
+    WHEN d.entity = 'Diva (Pre-launch)' THEN get_href('https://x.com/divastaking', d.entity)
+    WHEN info.x_username IS NOT NULL THEN get_href('https://x.com/' || info.x_username, d.entity)
+    WHEN d.entity IS NULL THEN 'Unidentified'
+    ELSE d.entity END AS entity
+, d.eth_inflow
+--, eth_outflow
+, -d.eth_principal_outflow AS eth_principal_outflow
+, -d.eth_rewards_outflow AS eth_rewards_outflow
+, d.net_inflow
+, d.net_inflow_excluding_rewards
+FROM (
+    SELECT CASE WHEN i.entity IS NOT NULL THEN ROW_NUMBER() OVER(ORDER BY COALESCE(i.eth_inflow, 0)-COALESCE(o.eth_outflow, 0) DESC) END AS ranking
+    , CASE WHEN i.entity IS NOT NULL THEN ROW_NUMBER() OVER(ORDER BY COALESCE(i.eth_inflow, 0)-COALESCE(o.eth_principal_outflow, 0) DESC) END AS ranking_excl_rewards
+    , CASE WHEN i.entity = 'Abyss Finance' THEN NULL ELSE i.entity END AS entity
+    , COALESCE(i.eth_inflow, 0) AS eth_inflow
+    , COALESCE(o.eth_outflow, 0) AS eth_outflow
+    , COALESCE(o.eth_principal_outflow, 0) AS eth_principal_outflow
+    , COALESCE(o.eth_rewards_outflow, 0) AS eth_rewards_outflow
+    , COALESCE(i.eth_inflow, 0)-COALESCE(o.eth_outflow, 0) AS net_inflow
+    , COALESCE(i.eth_inflow, 0)-COALESCE(o.eth_principal_outflow, 0) AS net_inflow_excluding_rewards
+    FROM inflow i
+    LEFT OUTER JOIN outflow o ON i.entity=o.entity
+    WHERE i.entity IS NOT NULL
+    AND o.entity IS NOT NULL
+    ) d
+LEFT JOIN staking_ethereum.info info ON info.entity=d.entity
+--WHERE net_inflow < 0
+ORDER BY ranking_excl_rewards
+```
+
+```
+get_bitcoin_top_holders_analysis
+
+-- This query used incompatible data types from Dune SQL alpha and may need to be updated.
+-- More details can be found on https://dune.com/docs/query/dunesql-changes/
+SELECT 
+	address
+    , sum(value) as balance
+    , EXTRACT(DAY FROM sum(value*(now() - o.block_time))/sum(value)) as weighted_age_utxo_days
+FROM bitcoin.outputs o
+WHERE not exists (SELECT 1 FROM bitcoin.inputs i
+                    WHERE i.spent_tx_id = o.tx_id) --ignore UTXOs that have been spent already
+AND type != 'nulldata' -- could also check script_asm NOT LIKE '%OP_RETURN%'
+AND address is not null -- bunch of undecoded scripts right now that we're going to ignore.
+GROUP BY 1
+ORDER BY 2 desc 
+LIMIT 1000
+```
+
+```
+get_polygon_gaming_analysis
+
+with evms_contracts as (select address,
+    max(name) as name, 
+    max(namespace) as namespace
+    from evms.contracts  
+    group by 1), 
+
+contract_mapping as (select address AS contract_address, 
+    max(owner) as contract_project, 
+    max(category) as category
+    from dune.polygonlabs.dataset_polygon_contract_mapping
+    where category = 'Gaming'
+    group by 1), 
+    
+
+  totals as (
+
+select date_trunc('day', t1.block_time) as time, 
+t3.contract_project as name,
+count(distinct t1.hash) as txs, 
+count(distinct t1."from") as user
+from polygon.transactions as t1 
+-- left join evms_contracts as t2 on t1.to=t2.address
+join contract_mapping as t3 on CAST(t1.to AS varchar) =t3.contract_address
+where    block_time > CURRENT_TIMESTAMP - INTERVAL '3' month 
+-- and (t2.namespace  is not null or t3.contract_project is not null)
+-- and  ((t2.namespace) in (select distinct namespace from top_projects)
+-- or t3.contract_project in (select distinct namespace from top_projects))
+-- and to not in (select distinct contract_address from erc20_polygon.evt_Transfer)
+-- and to not in (select distinct contract_address from erc721_polygon.evt_Approval)
+-- and to not in (select distinct contract_address from erc1155_polygon.evt_ApprovalForAll)
+group by 1, 2) 
+
+select * from (
+  SELECT
+    name,
+    time, 
+    sum(txs) over(partition by name order by time) AS total_trx,
+    sum(user) over(partition by name order by time) AS total_users,
+      avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS txs_past_7_days, 
+    ((cast(avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) as double)-
+    cast(avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 13 PRECEDING AND 7 PRECEDING) as double))/
+cast(avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 13 PRECEDING AND 7 PRECEDING) as double))  as txs_perc_7, 
+   avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS txs_past_30_days, 
+    ((cast(avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) as double)-
+    cast(avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 59 PRECEDING AND 30 PRECEDING) as double))/
+cast(avg(txs) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 59 PRECEDING AND 30 PRECEDING) as double))  as txs_perc_30, 
+      avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS user_past_7_days, 
+    ((cast(avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) as double)-
+    cast(avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 13 PRECEDING AND 7 PRECEDING) as double))/
+cast(avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 13 PRECEDING AND 7 PRECEDING) as double))  as user_perc_7, 
+   avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS user_past_30_days, 
+    ((cast(avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) as double)-
+    cast(avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 59 PRECEDING AND 30 PRECEDING) as double))/
+cast(avg(user) OVER (PARTITION BY name ORDER BY time ROWS BETWEEN 59 PRECEDING AND 30 PRECEDING) as double)) as user_perc_30
+  FROM
+    totals
+)
+where time=date_trunc('day', CURRENT_TIMESTAMP)
+order by 3 desc, 4 desc 
+```
+
+```
+get_tokenization_market_analysis
+
+with timeseries as (
+select day, category, sum(market_cap) as market_cap
+from dune."21co".result_fact_tokenisation_summary
+group by 1,2),
+
+change as (
+select 
+rank() over (partition by day order by market_cap desc) as ranking,
+day,
+category,
+market_cap,
+market_cap/sum(market_cap) over (partition by day) as market_share,
+case when 
+market_cap/lag(market_cap,1) over (partition by category order by day) -1 < 0.0001 then 0 
+else market_cap/lag(market_cap,1) over (partition by category order by day) -1
+end as change_1d,
+market_cap/lag(market_cap,7) over (partition by category order by day) -1 as change_7d,
+market_cap/lag(market_cap,30) over (partition by category order by day) -1 as change_30d,
+market_cap/lag(market_cap,90) over (partition by category order by day) -1 as change_90d,
+market_cap/lag(market_cap,180) over (partition by category order by day) -1 as change_180d,
+market_cap/lag(market_cap,365) over (partition by category order by day) -1 as change_365d
+from timeseries
+)
+
+select *
+from change
+where day = (select max(day) from timeseries)
+and market_cap is not null
+order by market_cap desc
+```
+
+```
+get_tokenization_project_analysis
+
+with timeseries as (
+select day, 
+project,
+array_Agg(distinct category order by category asc) as category,
+array_Agg(distinct blockchain order by blockchain asc) as blockchain, 
+count(distinct token) as number_product,
+sum(market_cap) as market_cap
+from dune."21co".result_fact_tokenisation_summary
+group by 1,2
+),
+
+change as (
+select 
+rank() over (partition by day order by market_cap desc) as ranking,
+day,
+project,
+category,
+blockchain,
+number_product,
+market_cap,
+market_cap/sum(market_cap) over (partition by day) as market_share,
+case when 
+market_cap/lag(market_cap,1) over (partition by project order by day) -1 <0.0001 then 0
+else market_cap/lag(market_cap,1) over (partition by project order by day) -1 
+end as change_1d,
+case when 
+market_cap/lag(market_cap,7) over (partition by project order by day) -1 <0.0001 then 0
+else market_cap/lag(market_cap,7) over (partition by project order by day) -1 
+end as change_7d,
+market_cap/lag(market_cap,30) over (partition by project order by day) -1 as change_30d,
+market_cap/lag(market_cap,90) over (partition by project order by day) -1 as change_90d,
+market_cap/lag(market_cap,180) over (partition by project order by day) -1 as change_180d,
+market_cap/lag(market_cap,365) over (partition by project order by day) -1 as change_365d
+from timeseries
+)
+
+select *
+from change
+where day = (select max(day) from timeseries)
+and market_cap is not null
+order by market_cap desc
+
+-- select * from timeseries 
+-- where project = 'Circle'
+```
+
+```
+get_memecoin_market_analysis
+
+-- with
+-- -- today as (
+-- --     SELECT
+-- --       CASE WHEN token_address = 'EJPtJEDogxzDbvM8qvAsqYbLmPj5n1vQeqoAzj9Yfv3q' THEN 'BOZO' 
+-- --         WHEN Token_Symbol = 'шайлушай' THEN 'SMURFCAT'
+-- --         ELSE Token_Symbol
+-- --       END AS Token_Symbol
+-- --       , token_address
+-- --       , blockchain
+-- --       , SUM(cast(num_buyers as DOUBLE)) as num_buyers_today
+-- --       , SUM(cast(num_sellers as DOUBLE)) as num_sellers_today
+-- --     FROM query_3735299 
+-- --     WHERE DATE(block_time) = DATE(NOW())
+-- --         AND Token_Symbol <> 'SHIA'
+-- --     GROUP BY 1,2,3
+-- -- )
+-- one_day as (
+--     SELECT
+--       Token_Symbol
+--       , token_address
+--       , blockchain
+--       , SUM(cast(num_buyers as DOUBLE)) as num_buyers_one
+--       , SUM(cast(num_sellers as DOUBLE)) as num_sellers_one
+--     FROM query_3768262 
+--     WHERE DATE(block_time) = DATE(NOW() - interval '24' hour)
+--         AND Token_Symbol <> 'SHIA'
+--     GROUP BY 1,2,3
+-- )
+-- , week as (
+--     SELECT
+--       Token_Symbol
+--       , token_address
+--       , blockchain
+--       , SUM(cast(num_buyers as DOUBLE)) as num_buyers_week
+--       , SUM(cast(num_sellers as DOUBLE)) as num_sellers_week
+--     FROM query_3768262
+--     WHERE DATE(block_time) = DATE(NOW() - interval '7' day)
+--         AND Token_Symbol <> 'SHIA'
+--     GROUP BY 1,2,3
+-- )
+-- , month as (
+--     SELECT
+--       Token_Symbol
+--       , token_address
+--       , blockchain
+--       , SUM(cast(num_buyers as DOUBLE)) as num_buyers_month
+--       , SUM(cast(num_sellers as DOUBLE)) as num_sellers_month
+--     FROM query_3768262 
+--     WHERE DATE(block_time) = DATE(NOW() - interval '30' day)
+--         AND Token_Symbol <> 'SHIA'
+--     GROUP BY 1,2,3
+-- )
+-- SELECT
+--     a.Token_Symbol
+--     , a.token_address
+--     , a.blockchain
+--     , num_buyers_today
+--     , CASE WHEN num_sellers_today = 0 THEN 1
+--         ELSE num_sellers_today
+--     END AS num_sellers_today
+--     , num_buyers_one
+--     , num_sellers_one
+--     , num_buyers_week
+--     , num_sellers_week
+--     , num_buyers_month
+--     , num_sellers_month
+-- FROM today a 
+-- LEFT JOIN one_day b ON b.Token_Symbol = a.Token_Symbol
+-- LEFT JOIN week c ON c.Token_Symbol = a.Token_Symbol
+-- LEFT JOIN month d ON d.Token_Symbol = a.Token_Symbol
+-- WHERE num_buyers_month is NOT NULL 
+--     AND num_sellers_month is NOT NULL
+-- ORDER BY 4 DESC
+with
+num_buyers_sellers as (
+    SELECT
+        Token_Symbol
+        , token_address
+        , blockchain
+        -- , num_buyers_today
+        , CASE WHEN num_buyers_today = 0 THEN 1
+            ELSE num_buyers_today
+        END AS num_buyers_today        
+        -- , num_sellers_today
+        , CASE WHEN num_sellers_today = 0 THEN 1
+            ELSE num_sellers_today
+        END AS num_sellers_today
+        -- , num_buyers_one
+        -- , num_sellers_one
+        -- , num_buyers_week
+        -- , num_sellers_week
+        -- , num_buyers_month
+        -- , num_sellers_month
+        , CASE WHEN num_buyers_one = 0 THEN 1
+            ELSE num_buyers_one
+        END AS num_buyers_one
+        , CASE WHEN num_sellers_one = 0 THEN 1
+            ELSE num_sellers_one
+        END AS num_sellers_one
+        , CASE WHEN num_buyers_week = 0 THEN 1
+            ELSE num_buyers_week
+        END AS num_buyers_week
+        , CASE WHEN num_sellers_week = 0 THEN 1
+            ELSE num_sellers_week
+        END AS num_sellers_week
+        , CASE WHEN num_buyers_month = 0 THEN 1
+            ELSE num_buyers_month
+        END AS num_buyers_month
+        , CASE WHEN num_sellers_month = 0 THEN 1
+            ELSE num_sellers_month
+        END AS num_sellers_month
+    -- FROM today a 
+    FROM query_3768262
+    -- LEFT JOIN week b ON b.Token_Symbol = a.Token_Symbol
+    -- LEFT JOIN month c ON c.Token_Symbol = a.Token_Symbol
+    -- WHERE num_buyers_month is NOT NULL 
+    --     AND num_sellers_month is NOT NULL
+    -- ORDER BY 4 DESC
+)
+SELECT
+    Token_Symbol
+    , token_address
+    , blockchain
+    , num_buyers_today/num_sellers_today as today_ratio
+    , num_buyers_one/num_sellers_one as one_ratio
+    , num_buyers_week/num_sellers_week as week_ratio
+    , num_buyers_month/num_sellers_month as month_ratio
+    -- , CASE WHEN (num_buyers_month/num_sellers_month) = ('Infinity') THEN (0)
+    -- END AS month_ratio
+FROM num_buyers_sellers
+ORDER BY 4 DESC
+```
+
+```
+get_emerging_ai_tokens_analysis
+
+SELECT
+      token_bought_symbol
+    , blockchain
+    , SUM(amount_usd) AS volume_usd
+    , COUNT(*) AS nb_trades
+    , MIN(block_time) as first_trade
+    , CAST(token_bought_address AS varchar) AS token_address
+FROM dex.trades
+WHERE token_bought_symbol IN (
+    SELECT DISTINCT token_bought_symbol
+    FROM dex.trades
+    WHERE 
+        token_bought_symbol LIKE '%AI%' 
+        AND token_bought_symbol NOT IN ('DAI','GRAIL','WXDAI','MAI','DAI.e','XAI','HAIR','sDAI','GRAI','USDC-DAI-USDT')
+        AND block_time > NOW() - interval '30' day
+    )
+GROUP BY 1,2,6
+HAVING MIN(block_time) >= NOW() - interval '12' month
+AND SUM(amount_usd)>5e6
+
+ORDER BY 3 DESC
+```
+
+```
+get_crypto_category_performance
+
+WITH data AS (
+  SELECT
+    'Data availability' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (6535,22861,7411,6841,541,4191,27766,6747)
+  GROUP BY 1
+  union all
+  SELECT
+    'DePIN' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (5690,2280,2416,5632,7431,5665,1720,9104,3911,2777,3640,2682,3029,1042,1455,16612,3783,5665)
+  GROUP BY 1
+  union all
+  SELECT
+    'Layer1' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (3513,1027,5426,1839,2010,5805,11419,1958,6535,3794,4642,7226,20947,23149,4030,21794)
+  GROUP BY 1
+  union all
+  SELECT
+    'RWA coins' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (13967,9417,8534,21159,6536,6748,9481,5198,20362,4950,21516,4092)
+  GROUP BY 1
+  union all
+  SELECT
+    'Layer 2' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (10603,11840,27075,11841,22691,13631,9640,1934,14556)
+  GROUP BY 1
+  union all
+  SELECT
+    'Modular blockchain' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (22861,28932,3978,541,7229,27766,27445)
+  GROUP BY 1
+  union all
+   SELECT
+    'Governance' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (7083, 8916, 1518, 7278, 2586, 12387, 10791, 7186, 6538, 13855, 5692, 6945)
+  GROUP BY 1
+  union all
+  SELECT
+    'Gamefi' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (10603,10804,10603,7080,10804,28298,6783,6210,18876,14101,23711,8719,2130,29335,18069,5691,28933)
+  GROUP BY 1
+  union all
+  SELECT
+    'Memecoins' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (74,5994,24478,28752,10804,23095,26873,29870,28301)
+  GROUP BY 1
+  union all
+  SELECT
+    'BRC-20' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (25028,28194,28412,28920,25208,29095)
+  GROUP BY 1
+  union all
+  SELECT
+    'AI' as category,
+    AVG(percent_change_7d) AS week_change,
+    AVG(percent_change_30d) AS month_change,
+    AVG(percent_change_60d) AS twomonth_change,
+    AVG(percent_change_90d) AS threemonth_change,
+    sum(coalesce(market_cap,0)) as total_market_cap
+  FROM dune.blockscan.dataset_coins_data
+  where id IN (22974, 5690, 3773, 7431, 27178, 28567, 2424, 19055, 26590, 23756, 3911, 27565, 9104, 1455, 2467, 16612, 6535)
+  GROUP BY 1
+)
+SELECT
+  *
+FROM data
+order by total_market_cap desc
+```
+
+```
+get_stablecoin_market_analysis
+
+with supply as (
+    select time, contract_address, symbol, amount
+    from dune."21co".result_stablecoin_total_supply_on_ethereum
+),
+
+price as (
+    select date_trunc('day', minute) as day, contract_address, symbol, avg(price) as price
+    from prices.usd 
+    where minute >= date('2021-01-01') and contract_address in (select distinct contract_address from supply) and blockchain = 'ethereum'
+    group by 1, 2, 3
+
+    union all 
+
+    select day, contract_address, symbol, price
+    from dune."21co".result_stablecoin_missing_price
+),
+
+custom_table as (
+    select category, symbol 
+    from query_3808604 -- stablecoins overview table
+    where blockchain = 'ethereum'
+), 
+
+summary as (
+    select a.time, a.symbol, amount * price as market_cap
+    from supply a
+    left join price b on a.time = b.day and a.contract_address = b.contract_address
+),
+
+final as (
+    select a.time, a.symbol, market_cap, b.category
+    from summary a 
+    join custom_table b on a.symbol = b.symbol
+),
+
+final_data as (
+    select rank() over (order by sum(market_cap) desc) as ranking, symbol, sum(market_cap) as total_market_cap
+    from final
+    where market_cap is not null and time >= now() - interval '24' hour
+    group by symbol
+)
+
+select *, total_market_cap /(select sum(total_market_cap) from final_data) as market_share, 
+    case
+        when symbol = 'USDT' then '<a href="https://tether.to/en">Tether</a>'
+        when symbol = 'USDC' then '<a href="https://www.circle.com/en/">Circle</a>'
+        when symbol = 'DAI' then '<a href="https://makerdao.com/en">Maker DAO</a>'
+        when symbol = 'FRAX' then '<a href="https://frax.finance/en">Frax Finance</a>'
+        when symbol = 'TUSD' then '<a href="https://tusd.io/">True USD</a>'
+        when symbol = 'USDP' then '<a href="https://paxos.com/usdp/">Pax Dollar</a>'
+        when symbol = 'MIM' then '<a href="https://abracadabra.money/en">Magic Internet Money</a>'
+        when symbol = 'alUSD' then '<a href="https://alchemix.fi/">Alchemix USD</a>'
+        when symbol = 'GUSD' then '<a href="https://www.gemini.com/dollar">Gemini Dollar</a>'
+        when symbol = 'USDD' then '<a href="https://usdd.network/#/">Decentralized USD</a>'
+        when symbol = 'LUSD' then '<a href="https://www.liquity.org/">LUSD Liquity USD</a>'
+        when symbol = 'BUSD' then '<a href="https://www.paxos.com/busd/">Binance USD</a>'
+        when symbol = 'sUSD' then '<a href="https://www.synthetix.io/">Synthetix USD</a>'
+        else ''
+    end as entity
+from final_data 
+where total_market_cap > 10000000
+```
+
+```
+get_farcaster_token_mentions_analysis
+
+WITH 
+user_join_data as(
+    SELECT 
+        fid,
+        type,
+        value,
+        timestamp,
+        created_at,
+        updated_at
+    FROM dune.neynar.dataset_farcaster_user_data
+), 
+
+casts_data as(
+    select
+        fid,
+        hash,
+        text,
+        timestamp
+    from dune.neynar.dataset_farcaster_casts
+),
+
+reaction_data as(
+    select
+        fid,
+        hash,
+        reaction_type,
+        target_hash,
+        timestamp
+    from dune.neynar.dataset_farcaster_reactions
+),
+
+user_name AS (
+    SELECT
+        fid,
+        MAX(CASE WHEN type = 6 THEN value END) AS username
+    FROM dune.neynar.dataset_farcaster_user_data AS u
+    GROUP BY
+    fid
+), 
+
+cast_list AS (
+  SELECT
+    c.id,
+    c.fid,
+    c.hash,
+    c.text,
+    c.timestamp,
+    c.parent_fid,
+    c.parent_hash,
+    user_name.username,
+    (
+      SELECT
+        username
+      FROM user_name
+      WHERE
+        fid = c.parent_fid
+    ) AS parent_username
+  FROM dune.neynar.dataset_farcaster_casts AS c
+  LEFT JOIN user_name
+    ON c.fid = user_name.fid
+
+),
+
+transition_about_farcaster_unique_users as(
+    SELECT
+        date_trunc('day', timestamp) as day,
+        sum(count(fid)) over (order by date_trunc('day', timestamp)) as cumulative_user_amount,
+        count(fid) as user_amount
+    FROM user_join_data
+    where type = 6
+    group by date_trunc('day', timestamp)
+),
+
+transition_about_farcaster_cast_amount as (
+    SELECT
+        date_trunc('day', timestamp) as day,
+        count(hash) as casts_amount
+    FROM casts_data
+    where date_trunc('day', timestamp) >= (select min(day) from transition_about_farcaster_unique_users)
+    group by date_trunc('day', timestamp)
+),
+
+transition_about_farcaster_reaction as(
+    SELECT
+        date_trunc('day', timestamp) as day,
+        count(hash) as reaction_amount
+    FROM reaction_data
+    where date_trunc('day', timestamp) >= (select min(day) from transition_about_farcaster_unique_users)
+    group by date_trunc('day', timestamp)
+),
+
+active_user as(
+    select 
+        fid,
+        hash,
+        timestamp
+    from casts_data
+    union
+    select 
+        fid,
+        hash,
+        timestamp
+    from reaction_data
+),
+
+transtion_active_user as(
+    select 
+        count(distinct fid) as active_user,
+        date_trunc('day', timestamp) as day
+    from active_user
+    where date_trunc('day', timestamp) >= (select min(day) from transition_about_farcaster_unique_users)
+    group by date_trunc('day', timestamp)
+    order by date_trunc('day', timestamp) asc
+), 
+
+cast_date AS (
+  SELECT
+    transtion_active_user.day AS day,
+    TRY_CAST(active_user AS REAL) AS active_user,
+    TRY_CAST(casts_amount AS REAL) AS casts_amount,
+    CASE WHEN reaction_amount > 0 THEN TRY_CAST(reaction_amount AS REAL) ELSE 0 END AS reaction_amount
+  FROM transtion_active_user
+  LEFT JOIN transition_about_farcaster_cast_amount
+    ON transtion_active_user.day = transition_about_farcaster_cast_amount.day
+  LEFT JOIN transition_about_farcaster_reaction
+    ON transtion_active_user.day = transition_about_farcaster_reaction.day
+),
+
+cast_include_token_symbol as(
+    SELECT 
+        fid,
+        hash,
+        REGEXP_EXTRACT_ALL(trim(',' from REGEXP_EXTRACT(CONCAT(',',REPLACE(REGEXP_REPLACE(UPPER(text), '\n',' '),' ',','),','), ',\$([^,]+),')) , '\$[a-zA-Z]+') as Token_symbol,
+        date_trunc('day', timestamp) as day
+    from cast_list
+),
+
+count_include_token_7days as(
+    select
+        Token_symbol,
+        count(hash) as count_cast_7days
+    from cast_include_token_symbol
+    where Token_symbol is not null
+    and day > CURRENT_DATE - INTERVAL '7' DAY 
+    group by Token_symbol
+),
+
+count_include_token_14days as(
+    select
+        Token_symbol,
+        count(hash) as count_cast_14days
+    from cast_include_token_symbol
+    where Token_symbol is not null
+    and day  > CURRENT_DATE - INTERVAL '14' DAY 
+    group by Token_symbol
+),
+
+RankedTokens AS (
+  SELECT 
+    count_include_token_7days.Token_symbol, 
+    count_cast_7days,
+    count_cast_14days - count_cast_7days as count_cast_before_7days,
+    RANK() OVER (ORDER BY count_cast_7days DESC) as rank
+  FROM count_include_token_7days
+  left join count_include_token_14days
+  on count_include_token_7days.Token_symbol = count_include_token_14days.Token_symbol
+  order by count_cast_7days desc
+  limit 101
+)
+
+SELECT 
+    Token_symbol, 
+    count_cast_7days,
+    count_cast_before_7days,
+    case 
+        when count_cast_before_7days = 0 then null
+        else round(round(cast (count_cast_7days as double),2) / round(cast(count_cast_before_7days as double),2),3) 
+    end as rate_of_increase,
+    case 
+        when count_cast_before_7days = 0 then 'new'
+        when count_cast_7days - count_cast_before_7days > 0 
+            and count_cast_before_7days <> 0 then 'up'
+        when count_cast_7days - count_cast_before_7days < 0 
+            and count_cast_before_7days <> 0 then 'down'
+        else null
+    end as trend
+FROM RankedTokens
+```
+
+```
+get_top_nft_collections_ranking
+
+WITH rankings AS (
+    SELECT
+        name,
+        floor_ask_value / cast(1e18 as double) AS current_floor,
+        day1_volume / cast(1e18 as double) AS "1day_volume",
+        day7_volume / cast(1e18 as double) AS "7day_volume",
+        day30_volume / cast(1e18 as double) AS "30day_volume",
+        all_time_volume / cast(1e18 as double) AS all_time_volume,
+        ROW_NUMBER() OVER (ORDER BY day1_volume DESC) AS ranking_1d,
+        ROW_NUMBER() OVER (ORDER BY day7_volume DESC) AS ranking_7d,
+        ROW_NUMBER() OVER (ORDER BY day30_volume DESC) AS ranking_30d
+    FROM reservoir.collections
+)
+SELECT
+    SUBSTRING(name, 1, 30) AS name,
+    current_floor,
+    "1day_volume",
+    "7day_volume",
+    "30day_volume",
+    all_time_volume,
+    ranking_1d,
+    ranking_7d,
+    ranking_30d
+FROM rankings
+WHERE 
+    ranking_1d <= 100 OR 
+    ranking_7d <= 100 OR 
+    ranking_30d <= 100
+ORDER BY "7day_volume" DESC  -- You can change this to sort by any column you prefer
+``

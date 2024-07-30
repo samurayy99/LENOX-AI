@@ -18,8 +18,8 @@ class IntentDetector:
 
     def detect_intent(self, user_query: str) -> IntentType:
         user_query_lower = user_query.lower()
-        research_keywords = ["research", "provide more information about", "study", "investigate", "search the web", "provide in-depth insights", "explore"]
-        visualization_keywords = ["visualize", "graph", "chart", "plot", "show me a graph of", "display data"]
+        research_keywords = ["research", "provide more information about", "study", "investigate", "search the web", "provide in-depth insights", "explore", "coin $", "information about $"]
+        visualization_keywords = ["visualize", "provide graph", "show chart", "plot", "show me a graph of", "display data"]
         
         if any(keyword in user_query_lower for keyword in research_keywords):
             return IntentType.GPT_RESEARCH

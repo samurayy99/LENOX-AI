@@ -4,6 +4,7 @@ from coingecko_tools import calculate_rsi, calculate_macd
 from fearandgreed_tools import get_fear_and_greed_index
 
 
+
 @tool
 def combined_technical_analysis(symbol: str, prices: list, period: int = 14) -> str:
     """
@@ -43,8 +44,9 @@ def combined_technical_analysis(symbol: str, prices: list, period: int = 14) -> 
         logging.error(f"Error in combined technical analysis: {str(e)}")
         return f"Error in combined technical analysis: {str(e)}"
 
+
 @tool
-def generate_recommendation(rsi_result: str, macd_result: str, fng_result: str, whale_transactions: str) -> str:
+def generate_recommendation(rsi_result: str, macd_result: str, fng_result: str) -> str:
     """
     Generates a recommendation based on the analysis results.
 
@@ -52,7 +54,6 @@ def generate_recommendation(rsi_result: str, macd_result: str, fng_result: str, 
     - rsi_result (str): The result of the RSI analysis.
     - macd_result (str): The result of the MACD analysis.
     - fng_result (str): The result of the Fear and Greed Index analysis.
-    - whale_transactions (str): The result of the Whale Alert analysis.
 
     Returns:
     - str: A recommendation based on the analysis.
@@ -84,7 +85,5 @@ def generate_recommendation(rsi_result: str, macd_result: str, fng_result: str, 
             recommendation += "- The Fear and Greed Index indicates fear in the market. There might be buying opportunities.\n"
         else:
             recommendation += "- The Fear and Greed Index indicates a neutral market sentiment.\n"
-    
-    
     
     return recommendation

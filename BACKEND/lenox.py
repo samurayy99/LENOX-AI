@@ -46,7 +46,7 @@ class Lenox:
 
     def setup_components(self, tools):
         self.functions = [convert_to_openai_function(f) for f in tools]
-        self.model = ChatOpenAI(model="gpt-4o-mini", temperature=0.6).bind(functions=self.functions)
+        self.model = ChatOpenAI(model="gpt-4o-mini", temperature=0.7).bind(functions=self.functions)
         self.prompt = self.configure_prompts()
         self.chain = self.setup_chain()
         self.qa = AgentExecutor(agent=self.chain, tools=tools, verbose=False)
@@ -78,7 +78,16 @@ class Lenox:
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
         
-    
+        
+    def get_dynamic_temperature(self, query: str) -> float:
+        if any(keyword in query.lower() for keyword in ['price', 'market data', 'regulation', 'explain']):
+            return 0.3
+        elif any(keyword in query.lower() for keyword in ['predict', 'trend', 'future', 'opinion']):
+            return 0.7
+        else:
+            return 0.6
+        
+        
     def convchain(self, query: str, session_id: str = "my_session") -> dict:
         if not query:
             return {"type": "text", "content": "Please enter a query."}
@@ -116,6 +125,11 @@ class Lenox:
 
         # Configure prompt with chat history
         prompt = self.configure_prompts(context_messages=chat_history_contents, user_query=query)
+        # In the convchain method:
+        dynamic_temp = self.get_dynamic_temperature(query)
+        self.model = ChatOpenAI(model="gpt-4o-mini", temperature=dynamic_temp).bind(functions=self.functions)
+        self.prompt_engine.set_temperature(dynamic_temp)  # Add this line here
+
 
         # Generate response
         result = self.qa.invoke(
@@ -207,38 +221,38 @@ class Lenox:
             logger.error(f"Error storing feedback: {e}")
 
     def process_feedback(self, feedback: str, query: str, session_id: str) -> str:
-        """
-        Process feedback in real-time to improve the model.
+            """
+            Process feedback in real-time to improve the model.
 
-        Parameters:
-        - feedback (str): The feedback provided by the user ('positive' or 'negative').
-        - query (str): The original query associated with the feedback.
-        - session_id (str): The session ID of the user providing the feedback.
+            Parameters:
+            - feedback (str): The feedback provided by the user ('positive' or 'negative').
+            - query (str): The original query associated with the feedback.
+            - session_id (str): The session ID of the user providing the feedback.
 
-        Returns:
-        - str: Response after processing feedback.
-        """
-        try:
-            if feedback == 'positive':
-                # Logic to reinforce good responses
-                logger.info(f"Positive feedback received for query: {query}")
-                # Example: You could update a weight or score for this response
-                # self.update_response_score(query, 1)
-            elif feedback == 'negative':
-                # Logic to learn from negative feedback
-                logger.info(f"Negative feedback received for query: {query}")
-                # Example: You could decrease a weight or score for this response
-                # self.update_response_score(query, -1)
-            else:
-                logger.warning(f"Unknown feedback type received: {feedback}")
+            Returns:
+            - str: Response after processing feedback.
+            """
+            try:
+                if feedback == 'positive':
+                    # Logic to reinforce good responses
+                    logger.info(f"Positive feedback received for query: {query} (Session: {session_id})")
+                    # Example: You could update a weight or score for this response
+                    # self.update_response_score(query, 1, session_id)
+                elif feedback == 'negative':
+                    # Logic to learn from negative feedback
+                    logger.info(f"Negative feedback received for query: {query} (Session: {session_id})")
+                    # Example: You could decrease a weight or score for this response
+                    # self.update_response_score(query, -1, session_id)
+                else:
+                    logger.warning(f"Unknown feedback type received: {feedback} (Session: {session_id})")
 
-            # Add your logic here to use this feedback for improving future responses
-            # This could involve updating a machine learning model, adjusting response templates, etc.
+                # Add your logic here to use this feedback for improving future responses
+                # This could involve updating a machine learning model, adjusting response templates, etc.
 
-            return "Feedback processed successfully"
-        except Exception as e:
-            logger.error(f"Error processing feedback: {e}")
-            return "Error processing feedback"
+                return "Feedback processed successfully"
+            except Exception as e:
+                logger.error(f"Error processing feedback: {e} (Session: {session_id})")
+                return "Error processing feedback"
 
     def apply_feedback(self):
         """Periodically apply accumulated feedback to improve the model."""

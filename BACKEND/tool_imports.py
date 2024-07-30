@@ -13,11 +13,36 @@ from coinpaprika_tools import get_coin_details, get_coin_tags, get_market_overvi
 from cryptopanic_tools import get_latest_news, get_news_sources, get_last_news_title
 from coinmarketcap_tools import get_latest_listings, get_crypto_metadata, get_global_metrics
 from fearandgreed_tools import get_fear_and_greed_index
-from dune_analytics_tools import get_monthly_dex_volume_by_project, get_nft_market_volume, get_sector_performance_analysis_24h, get_sector_performance_analysis_7d, get_sector_performance_analysis_30d, get_bitcoin_etf_analysis, get_ethereum_staking_analysis, get_bitcoin_top_holders_analysis, get_dex_volume_results, get_ethereum_daily_activity, get_polygon_gaming_analysis, get_tokenization_market_analysis, get_tokenization_project_analysis, get_memecoin_market_analysis, get_emerging_ai_tokens_analysis, get_crypto_category_performance, get_stablecoin_market_analysis, get_farcaster_token_mentions_analysis, get_top_nft_collections_ranking
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
-from integration_tools import get_current_price, get_historical_prices, comment_on_price
 from integration2_tools import combined_technical_analysis, generate_recommendation
-
+from dune_analytics_tools import (
+    get_dex_volume_rankings,
+    get_ethereum_daily_activity,
+    get_dex_monthly_volume_trends,
+    get_nft_market_activity_metrics,
+    get_crypto_sector_performance_analysis,
+    get_bitcoin_etf_analysis,
+    get_ethereum_staking_analysis,
+    get_bitcoin_top_holders_analysis,
+    get_polygon_gaming_metrics,
+    get_tokenization_market_analysis,
+    get_tokenization_project_metrics,
+    get_memecoin_trading_activity,
+    get_emerging_ai_tokens_analysis,
+    get_crypto_category_performance,
+    get_stablecoin_market_analysis,
+    get_farcaster_token_trends,
+    get_nft_collection_rankings,
+    get_bitcoin_yearly_returns,
+    get_opensea_daily_active_users,
+    get_opensea_monthly_active_users,
+    get_opensea_daily_volume_usd,
+    get_opensea_monthly_volume_usd,
+    get_opensea_monthly_nfts_sold
+    
+)
+from nasdaq_tools import get_nasdaq_data, get_bitcoin_insights
+from bitquery_tools import get_latest_pair_created
 
 def import_tools():
     """
@@ -76,39 +101,50 @@ def import_tools():
         get_fear_and_greed_index,  # Retrieves the Fear and Greed Index for the cryptocurrency market.
 
         # Dune Analytics Tools
-        get_monthly_dex_volume_by_project,
-        get_nft_market_volume,
-        get_sector_performance_analysis_24h,
-        get_sector_performance_analysis_7d,
-        get_sector_performance_analysis_30d,
-        get_bitcoin_etf_analysis,
-        get_ethereum_staking_analysis,
-        get_bitcoin_top_holders_analysis,
-        get_dex_volume_results,
-        get_ethereum_daily_activity,
-        get_polygon_gaming_analysis,
-        get_tokenization_market_analysis,
-        get_tokenization_project_analysis,
-        get_memecoin_market_analysis,
-        get_emerging_ai_tokens_analysis,
-        get_crypto_category_performance,
-        get_stablecoin_market_analysis,
-        get_farcaster_token_mentions_analysis,
-        get_top_nft_collections_ranking,
+        get_dex_volume_rankings,  # Retrieves and ranks DEX projects by trading volume.
+        get_ethereum_daily_activity,  # Retrieves daily active users and receiving addresses on Ethereum.
+        get_dex_monthly_volume_trends,  # Retrieves trends in monthly DEX trading volumes.
+        get_nft_market_activity_metrics,  # Retrieves metrics on NFT market activity.
+        get_crypto_sector_performance_analysis,  # Analyzes performance of different crypto sectors.
+        get_bitcoin_etf_analysis,  # Analyzes Bitcoin ETF trends and data.
+        get_ethereum_staking_analysis,  # Analyzes Ethereum staking data and trends.
+        get_bitcoin_top_holders_analysis,  # Analyzes top holders of Bitcoin.
+        get_polygon_gaming_metrics,  # Retrieves metrics on gaming activities on Polygon.
+        get_tokenization_market_analysis,  # Analyzes market trends in tokenization.
+        get_tokenization_project_metrics,  # Provides metrics on tokenization projects.
+        get_memecoin_trading_activity,  # Analyzes trading activity of meme coins.
+        get_emerging_ai_tokens_analysis,  # Analyzes trends in emerging AI tokens.
+        get_crypto_category_performance,  # Analyzes performance of different crypto categories.
+        get_stablecoin_market_analysis,  # Analyzes trends in the stablecoin market.
+        get_farcaster_token_trends,  # Retrieves trends in Farcaster token data.
+        get_nft_collection_rankings,  # Ranks NFT collections based on certain criteria.
+        get_bitcoin_yearly_returns,
+        get_opensea_daily_active_users,
+        get_opensea_monthly_active_users,
+        get_opensea_daily_volume_usd,
+        get_opensea_monthly_volume_usd,
+        get_opensea_monthly_nfts_sold,
+        
+        
+        
+        
         
         # Binance Tools
         get_binance_ticker,  # Retrieves the current ticker price from Binance.
         get_binance_order_book,  # Retrieves the order book for a specified cryptocurrency on Binance.
         get_binance_recent_trades,  # Retrieves recent trades for a specified cryptocurrency on Binance.
-
-        # Integration Tools
-        get_current_price,
-        get_historical_prices,
-        comment_on_price,
         
         # Integration2 Tools
         combined_technical_analysis,
         generate_recommendation,
+        
+        
+        # Nasdaq Tools
+        get_nasdaq_data,
+        get_bitcoin_insights,
+        
+        # Bitquery Tools
+        get_latest_pair_created,
         
 
     ]
