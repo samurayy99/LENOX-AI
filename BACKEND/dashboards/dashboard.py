@@ -16,15 +16,18 @@ long_callback_manager = DiskcacheLongCallbackManager(cache)
 load_figure_template("darkly")
 dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
 
+
 def create_dashboard(server: Flask) -> Flask:
     """Create a comprehensive cryptocurrency analysis dashboard."""
     dash_app = Dash(
-        server=server,
+        __name__,
         routes_pathname_prefix='/dashboard/',
         external_stylesheets=[dbc.themes.DARKLY, dbc_css],
         long_callback_manager=long_callback_manager,
         suppress_callback_exceptions=True
     )
+
+    dash_app.init_app(server)
 
     # Set the layout for the Dash app
     dash_app.layout = layout

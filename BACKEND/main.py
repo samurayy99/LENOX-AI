@@ -18,6 +18,7 @@ from code_interpreter import generate_visualization_response_sync
 from gpt_research_tools import GPTResearchManager
 import base64
 import os
+from lenox_opinion import generate_lenox_opinion
 
 
 
@@ -137,6 +138,7 @@ def transcribe_audio():
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 
+
 @app.route('/upload', methods=['POST'])
 def upload_document():
     data = request.get_json()
@@ -144,22 +146,32 @@ def upload_document():
         return jsonify({'error': 'No file content in the request'}), 400
 
     file_content = data['file_content']
+    additional_input = data.get('additional_input', '')
+
     try:
-        # Decode the base64 content
+        # Decode the file content
         decoded_content = base64.b64decode(file_content)
         
-        # Analyze the chart
+        # Perform chart analysis
         analysis = chart_analyzer.analyze_chart(decoded_content)
         
+        # Generate Lenox opinion
+        lenox_opinion_result = generate_lenox_opinion(analysis, additional_input, lenox)
+        
+        # Return the combined opinion and recommendation
         return jsonify({
             'message': 'Chart successfully analyzed.',
-            'analysis': analysis
+            'analysis': analysis,
+            'lenox_opinion': lenox_opinion_result['lenox_opinion'],
+            'hold_or_sell': lenox_opinion_result['hold_or_sell'],
+            'buy_or_wait': lenox_opinion_result['buy_or_wait']
         }), 200
     except Exception as e:
         app.logger.error(f"Error processing file: {e}")
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
-# Remove the /chart_query route if it's no longer needed
+
+
 
 
 

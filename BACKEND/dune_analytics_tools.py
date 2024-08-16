@@ -287,35 +287,37 @@ def get_tokenization_project_metrics():
     except Exception as e:
         return f"An error occurred while fetching tokenization project metrics: {str(e)}"
 
+
+
 @tool
 def get_memecoin_trading_activity():
     """
-    Analyzes memecoin trading activity, focusing on buyer/seller ratios over different time periods.
+    Retrieves detailed information about various memecoins, including price, supply, and market cap.
 
-    This function provides insights into the trading dynamics of memecoins,
-    helping to identify trends and potential market sentiment.
+    This function provides comprehensive data on multiple memecoins across different blockchains,
+    helping to identify trends and compare market performance.
 
     Returns:
-        dict: A dictionary containing:
-            - 'Token_Symbol': Symbol of the memecoin
-            - 'token_address': Contract address of the memecoin
-            - 'blockchain': Blockchain on which the memecoin is traded
-            - 'today_ratio': Ratio of buyers to sellers for the current day
-            - 'one_ratio': Ratio of buyers to sellers for the past 24 hours
-            - 'week_ratio': Ratio of buyers to sellers for the past 7 days
-            - 'month_ratio': Ratio of buyers to sellers for the past 30 days
+        dict: A dictionary containing for each memecoin:
+            - 'day': The date of the data point
+            - 'symbol': Symbol of the memecoin
+            - 'price': Current price in USD
+            - 'supply': Total supply of the token
+            - 'circ_supply': Circulating supply of the token
+            - 'fdv': Fully Diluted Valuation (price * total supply)
+            - 'market_cap': Market Capitalization (price * circulating supply)
 
     Raises:
         Exception: If there's an error in fetching or processing the data
     """
     try:
-        query_result = dune.get_latest_result(3930846)  
+        query_result = dune.get_latest_result(3930846)  # Make sure this query ID is correct for the new SQL
         return query_result.result
     except Exception as e:
-        return f"An error occurred while fetching memecoin trading activity: {str(e)}"
+        return f"An error occurred while fetching memecoin data: {str(e)}"
 
 @tool
-def get_emerging_ai_tokens_analysis():
+def get_ai_related_tokens_analysis():
     """
     Analyzes emerging AI-related tokens with significant trading volume.
 
@@ -340,31 +342,6 @@ def get_emerging_ai_tokens_analysis():
     except Exception as e:
         return f"An error occurred while fetching emerging AI tokens analysis: {str(e)}"
 
-@tool
-def get_crypto_category_performance():
-    """
-    Analyzes performance data for various cryptocurrency categories, including market cap and price changes over different time periods.
-
-    This function provides a comprehensive overview of how different sectors
-    within the cryptocurrency market are performing relative to each other.
-
-    Returns:
-        dict: A dictionary containing:
-            - 'category': Name of the cryptocurrency category
-            - 'week_change': Percentage change over the last 7 days
-            - 'month_change': Percentage change over the last 30 days
-            - 'twomonth_change': Percentage change over the last 60 days
-            - 'threemonth_change': Percentage change over the last 90 days
-            - 'total_market_cap': Total market capitalization of the category
-
-    Raises:
-        Exception: If there's an error in fetching or processing the data
-    """
-    try:
-        query_result = dune.get_latest_result(3930930)
-        return query_result.result
-    except Exception as e:
-        return f"An error occurred while fetching crypto category performance: {str(e)}"
 
 @tool
 def get_stablecoin_market_analysis():
@@ -422,28 +399,28 @@ def get_nft_collection_rankings():
     Ranks top NFT collections by trading volume over different time periods (1 day, 7 days, 30 days).
 
     This function provides a comprehensive view of the most active and valuable
-    NFT collections across various timeframes.
+    NFT collections across various timeframes, with all values denominated in Ethereum (ETH).
 
     Returns:
         dict: A dictionary containing:
             - 'name': Name of the NFT collection
             - 'current_floor': Current floor price in ETH
-            - '1day_volume': Trading volume over the last 24 hours
-            - '7day_volume': Trading volume over the last 7 days
-            - '30day_volume': Trading volume over the last 30 days
-            - 'all_time_volume': All-time trading volume
+            - '1day_volume': Trading volume over the last 24 hours in ETH
+            - '7day_volume': Trading volume over the last 7 days in ETH
+            - '30day_volume': Trading volume over the last 30 days in ETH
+            - 'all_time_volume': All-time trading volume in ETH
             - 'ranking_1d': Rank based on 1-day volume
             - 'ranking_7d': Rank based on 7-day volume
             - 'ranking_30d': Rank based on 30-day volume
 
     Raises:
-        Exception: If there's an error in fetching or processing the data
+        Exception: If there's an error in fetching or processing the data.
     """
     try:
-        query_result = dune.get_latest_result(3932216)  
+        query_result = dune.get_latest_result(3932216)
         return query_result.result
     except Exception as e:
-        return f"An error occurred while fetching NFT collection rankings: {str(e)}"
+        raise Exception(f"An error occurred while fetching NFT collection rankings: {str(e)}")
     
     
 
@@ -591,5 +568,57 @@ def get_opensea_monthly_volume_usd():
         return query_result.result
     except Exception as e:
         return f"An error occurred while fetching OpenSea monthly volume in USD: {str(e)}"
+    
+    
+@tool
+def get_nft_wash_trading_analysis():
+    """
+    Analyzes NFT wash trading across different Ethereum marketplaces.
 
-# ... existing code ...
+    Fetches data on NFT trading volume, identifying wash trades vs. organic trades.
+    Provides insights into market integrity and trading behavior.
+
+    Returns:
+        dict: Contains for each marketplace:
+            - Name and type
+            - Total volume and trade count
+            - Wash trade percentages (volume and count)
+            - Organic volume and trade count
+            - Operating blockchains
+
+    Raises:
+        Exception: If there's an error in fetching or processing the data
+    """
+    try:
+        query_result = dune.get_latest_result(3958323)
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching NFT wash trading analysis: {str(e)}"
+    
+    
+@tool
+def get_solana_dex_volume_analysis():
+    """
+    Retrieves and analyzes the trading volume data for decentralized exchanges (DEXs) on the Solana blockchain.
+
+    This function queries Dune Analytics to fetch trading volume statistics for various DEX projects on Solana,
+    including daily, weekly, monthly, and all-time volumes.
+
+    Returns:
+        dict: A dictionary containing:
+            - 'project': Name of the DEX project (with 'whirlpool' renamed to 'orca')
+            - 'one_day_volume': Trading volume over the last 24 hours in USD
+            - 'seven_day_volume': Trading volume over the last 7 days in USD
+            - 'thirty_day_volume': Trading volume over the last 30 days in USD
+            - 'all_time_volume': All-time trading volume in USD
+
+    The results are ordered by the 24-hour trading volume in descending order.
+
+    Raises:
+        Exception: If there's an error in fetching or processing the data
+    """
+    try:
+        query_result = dune.get_latest_result(3935128)
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching Solana DEX volume analysis: {str(e)}"

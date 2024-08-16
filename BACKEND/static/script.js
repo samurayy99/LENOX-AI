@@ -174,7 +174,7 @@ document.getElementById('uploadForm').addEventListener('submit', function (event
     const reader = new FileReader();
     reader.onload = function(e) {
         const fileContent = e.target.result;
-        
+
         // Display the uploaded image
         const imgElement = document.createElement('img');
         imgElement.src = fileContent;
@@ -185,7 +185,7 @@ document.getElementById('uploadForm').addEventListener('submit', function (event
 
         // Send only the base64 part to the server
         const base64Content = fileContent.split(',')[1];
-        
+
         fetch('/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -196,24 +196,36 @@ document.getElementById('uploadForm').addEventListener('submit', function (event
             showLoadingIndicator(false);
             if (data.error) {
                 console.error('Error uploading file:', data.error);
-                appendMessage(`Error uploading file: ${data.error}`, 'error-message');
+                // Remove or comment out the line below if you do not want to append the error message
+                // appendMessage(`Error uploading file: ${data.error}`, 'error-message');
             } else {
                 console.log('File uploaded successfully:', data.message);
                 appendMessage(`File uploaded successfully: ${data.message}`, 'bot-message');
-                
+
                 if (data.analysis) {
                     appendMessage(`Chart Analysis: ${data.analysis}`, 'bot-message');
+                }
+
+                // Display Lenox opinion and main recommendation if present
+                if (data.lenox_opinion) {
+                    appendMessage(`Lenox Opinion: ${data.lenox_opinion}`, 'bot-message');
+                }
+                if (data.main_recommendation) {
+                    appendMessage(`Main Recommendation: ${data.main_recommendation}`, 'bot-message highlight');
                 }
             }
         })
         .catch(error => {
             showLoadingIndicator(false);
             console.error('Error:', error);
-            appendMessage('An error occurred while uploading the file.', 'error-message');
+            // Remove or comment out the line below if you do not want to append the error message
+            // appendMessage('An error occurred while uploading the file.', 'error-message');
         });
     };
     reader.readAsDataURL(file);
 });
+
+
 
 
 let currentAudio = null;

@@ -15,6 +15,7 @@ from intent_detection import IntentDetector, IntentType
 from prompts import system_prompt_content, PromptEngineConfig, PromptEngine
 import logging  # Use built-in logging module
 from code_interpreter import generate_visualization_response_sync
+from lenox_opinion import generate_lenox_opinion
 
 
 # Initialize logging
@@ -61,6 +62,16 @@ class Lenox:
             | self.model
             | OpenAIFunctionsAgentOutputParser()
         )
+        
+    def analyze_chart_with_recommendation(self, chart_data, additional_input=""):
+        # Perform the chart analysis
+        analysis_result = self.chart_analyzer.analyze(chart_data)
+        
+        # Generate AI opinion and recommendation
+        opinion_and_recommendation = generate_lenox_opinion(analysis_result, additional_input, self)
+        
+        return opinion_and_recommendation
+    
 
     def configure_prompts(self, context_messages: Optional[List[str]] = None, user_query: str = ""):
         """Configure the prompt template with dynamic context."""
@@ -98,20 +109,28 @@ class Lenox:
         detected_intent = self.intent_detector.detect_intent(query)
         logger.debug(f"Detected intent: {detected_intent}")
 
+        # Handle GPT Research intent
+        if detected_intent == IntentType.GPT_RESEARCH:
+            result = self.gpt_research_manager.run_gpt_research(query)
+            research_content = result.get('content', 'Error processing the research request.')
+
+            # Add research result to conversation buffer and memory
+            self.conversation_buffer.chat_memory.add_user_message(query)
+            self.conversation_buffer.chat_memory.add_ai_message(research_content)
+            self.memory.chat_memory.add_user_message(query)
+            self.memory.chat_memory.add_ai_message(research_content)
+
+            return result
+
         # Handle visualization intent
         if detected_intent == IntentType.VISUALIZATION:
             try:
                 result = generate_visualization_response_sync(query)
                 logger.debug(f"Visualization result: {result}")
-                return result  # This should already be in the correct format
+                return result
             except Exception as e:
                 logger.error(f"Error generating visualization: {e}")
                 return {"type": "error", "content": str(e)}
-
-        # Handle other intents
-        if detected_intent != IntentType.GENERAL:
-            result = self.intent_detector.handle_intent(detected_intent, query)
-            return result  # Assuming handle_intent returns a dict with 'type' and 'content'
 
         # Update conversation buffer and memory
         self.conversation_buffer.chat_memory.add_user_message(query)
@@ -125,11 +144,11 @@ class Lenox:
 
         # Configure prompt with chat history
         prompt = self.configure_prompts(context_messages=chat_history_contents, user_query=query)
-        # In the convchain method:
+
+        # Set dynamic temperature
         dynamic_temp = self.get_dynamic_temperature(query)
         self.model = ChatOpenAI(model="gpt-4o-mini", temperature=dynamic_temp).bind(functions=self.functions)
-        self.prompt_engine.set_temperature(dynamic_temp)  # Add this line here
-
+        self.prompt_engine.set_temperature(dynamic_temp)
 
         # Generate response
         result = self.qa.invoke(

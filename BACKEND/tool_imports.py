@@ -28,8 +28,7 @@ from dune_analytics_tools import (
     get_tokenization_market_analysis,
     get_tokenization_project_metrics,
     get_memecoin_trading_activity,
-    get_emerging_ai_tokens_analysis,
-    get_crypto_category_performance,
+    get_ai_related_tokens_analysis,
     get_stablecoin_market_analysis,
     get_farcaster_token_trends,
     get_nft_collection_rankings,
@@ -38,11 +37,26 @@ from dune_analytics_tools import (
     get_opensea_monthly_active_users,
     get_opensea_daily_volume_usd,
     get_opensea_monthly_volume_usd,
-    get_opensea_monthly_nfts_sold
+    get_opensea_monthly_nfts_sold,
+    get_nft_wash_trading_analysis,
+    get_solana_dex_volume_analysis
     
 )
 from nasdaq_tools import get_nasdaq_data, get_bitcoin_insights
 from bitquery_tools import get_latest_pair_created
+from dune_crypto_sector_analysis_tools import (
+    get_all_sectors_relative_strength,
+    get_l1_relative_strength,
+    get_l2l3_relative_strength,
+    get_blockchain_service_infra_relative_strength,
+    get_blue_chip_defi_relative_strength,
+    get_defi_3_0_relative_strength,
+    get_memecoins_relative_strength,
+    get_rwa_relative_strength,
+    get_web3_gaming_relative_strength,
+    get_decentralised_ai_relative_strength,
+    get_depin_relative_strength
+)
 
 def import_tools():
     """
@@ -113,8 +127,7 @@ def import_tools():
         get_tokenization_market_analysis,  # Analyzes market trends in tokenization.
         get_tokenization_project_metrics,  # Provides metrics on tokenization projects.
         get_memecoin_trading_activity,  # Analyzes trading activity of meme coins.
-        get_emerging_ai_tokens_analysis,  # Analyzes trends in emerging AI tokens.
-        get_crypto_category_performance,  # Analyzes performance of different crypto categories.
+        get_ai_related_tokens_analysis,  # Analyzes trends in emerging AI tokens.
         get_stablecoin_market_analysis,  # Analyzes trends in the stablecoin market.
         get_farcaster_token_trends,  # Retrieves trends in Farcaster token data.
         get_nft_collection_rankings,  # Ranks NFT collections based on certain criteria.
@@ -124,6 +137,8 @@ def import_tools():
         get_opensea_daily_volume_usd,
         get_opensea_monthly_volume_usd,
         get_opensea_monthly_nfts_sold,
+        get_nft_wash_trading_analysis,
+        get_solana_dex_volume_analysis,
         
         
         
@@ -146,6 +161,18 @@ def import_tools():
         # Bitquery Tools
         get_latest_pair_created,
         
+        # Crypto Relative Strength Analysis
+        get_all_sectors_relative_strength,
+        get_l1_relative_strength,
+        get_l2l3_relative_strength,
+        get_blockchain_service_infra_relative_strength,
+        get_blue_chip_defi_relative_strength,
+        get_defi_3_0_relative_strength,
+        get_memecoins_relative_strength,
+        get_rwa_relative_strength,
+        get_web3_gaming_relative_strength,
+        get_decentralised_ai_relative_strength,
+        get_depin_relative_strength,
 
     ]
     return tools
