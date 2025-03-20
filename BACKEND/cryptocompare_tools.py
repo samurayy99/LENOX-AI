@@ -180,7 +180,27 @@ def list_news_feeds_and_categories() -> str:
     
 @tool
 def get_latest_trading_signals(coin_symbol: str) -> str:
-    """Fetches the latest trading signals for a specified cryptocurrency symbol."""
+    """
+    Fetches comprehensive market insights and sentiment analysis for a specified cryptocurrency symbol.
+
+    This function retrieves advanced trading signals from CryptoCompare, including:
+    - In/Out of the Money: Indicates if holders are in profit or loss
+    - Address Net Growth: Shows the growth rate of new addresses
+    - Concentration: Reveals changes in token distribution among holders
+    - Large Transactions: Tracks significant money movements
+
+    Each signal comes with a sentiment (bullish, bearish, or neutral) and a score,
+    providing a nuanced view of the current market dynamics.
+
+    Args:
+        coin_symbol (str): The symbol of the cryptocurrency (e.g., 'BTC' for Bitcoin)
+
+    Returns:
+        str: A detailed analysis of the latest trading signals, including sentiment and potential market implications.
+
+    Raises:
+        APIError: If there's an issue with the API request or response.
+    """
     api_key = os.getenv('CRYPTOCOMPARE_API_KEY')
     headers = {'authorization': f'Apikey {api_key}'} if api_key else {}
     url = f"https://min-api.cryptocompare.com/data/tradingsignals/intotheblock/latest?fsym={coin_symbol}"

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from langchain.agents import tool
 from langchain_openai import OpenAI
-from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from langchain.chains.question_answering import load_qa_chain
@@ -9,10 +9,20 @@ import scrapetube
 import logging
 from youtube_transcript_api import YouTubeTranscriptApi
 from pytube import YouTube
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Global embedding instance for reuse
+_embeddings = None
+
+def get_embeddings():
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    return _embeddings
 
 
 @tool
@@ -142,7 +152,7 @@ class YouTubeQA:
         Initializes the YouTubeQA class for processing and querying YouTube videos.
         """
         self.llm = OpenAI(temperature=0)
-        self.embeddings = OpenAIEmbeddings()
+        self.embeddings = get_embeddings()
         self.db = None  # Placeholder for Chroma instance
         self.chain = None  # Placeholder for QA chain
         
@@ -161,7 +171,13 @@ class YouTubeQA:
         """
         try:
             documents = process_youtube_video(url)
-            self.db = Chroma.from_documents(documents, self.embeddings).as_retriever()
+            # Use persistent storage for Chroma to avoid regenerating embeddings
+            persist_directory = os.path.join(os.getcwd(), "chroma_db")
+            self.db = Chroma.from_documents(
+                documents, 
+                self.embeddings,
+                persist_directory=persist_directory
+            ).as_retriever()
             self.chain = load_qa_chain(self.llm, chain_type="default")
             return "Video content successfully ingested and prepared for question-answering."
         except Exception as e:

@@ -14,11 +14,24 @@ from cryptopanic_tools import get_latest_news, get_news_sources, get_last_news_t
 from coinmarketcap_tools import get_latest_listings, get_crypto_metadata, get_global_metrics
 from fearandgreed_tools import get_fear_and_greed_index
 from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
-from integration2_tools import combined_technical_analysis, generate_recommendation
+from bitquery_tools import fetch_latest_pancakeswap_tokens, fetch_top_10_pumpfun_tokens, fetch_latest_solana_tokens, compare_bsc_token_transfers, fetch_bitfinex_bitcoin_transactions, get_latest_uniswap_pairs, get_multichain_portfolio
+
+# Moralis Tool Imports aktualisiert - Solana-fokussiert (nur Wallet-Tools)
+from moralis_wallet_tools import (
+    analyze_wallet
+)
+
+# Moralis Token Tools - Neue Imports
+from moralis_token_tools import (
+    analyze_memecoin
+)
+
+# GMGN Whale Tracker Tool
+from gmgn_tools import whale_watch_report, multi_timeframe_trending_analysis
+
 from dune_analytics_tools import (
     get_dex_volume_rankings,
     get_ethereum_daily_activity,
-    get_dex_monthly_volume_trends,
     get_nft_market_activity_metrics,
     get_crypto_sector_performance_analysis,
     get_bitcoin_etf_analysis,
@@ -39,24 +52,20 @@ from dune_analytics_tools import (
     get_opensea_monthly_volume_usd,
     get_opensea_monthly_nfts_sold,
     get_nft_wash_trading_analysis,
-    get_solana_dex_volume_analysis
-    
+    get_solana_dex_volume_analysis,
+    get_sunpump_recent_buys,
+    get_daily_fees_comparison,
+    get_top_solana_memecoins,
+    get_memecoin_project_rankings,
+    get_bitcoin_activity_metrics,
+    get_trading_bot_leaderboard,
+    get_tether_tron_daily_volume,
+    get_base_token_pair_metrics,
+    get_virtuals_launch_metrics,
+    get_token_holder_distribution
 )
-from nasdaq_tools import get_nasdaq_data, get_bitcoin_insights
-from bitquery_tools import get_latest_pair_created
-from dune_crypto_sector_analysis_tools import (
-    get_all_sectors_relative_strength,
-    get_l1_relative_strength,
-    get_l2l3_relative_strength,
-    get_blockchain_service_infra_relative_strength,
-    get_blue_chip_defi_relative_strength,
-    get_defi_3_0_relative_strength,
-    get_memecoins_relative_strength,
-    get_rwa_relative_strength,
-    get_web3_gaming_relative_strength,
-    get_decentralised_ai_relative_strength,
-    get_depin_relative_strength
-)
+
+
 
 def import_tools():
     """
@@ -114,10 +123,18 @@ def import_tools():
         # Fear and Greed Index Tools
         get_fear_and_greed_index,  # Retrieves the Fear and Greed Index for the cryptocurrency market.
 
+        # Moralis Solana Wallet Tools
+        analyze_wallet,
+
+        # Moralis Token Tools - Neue Tools
+        analyze_memecoin,
+        
+        # GMGN Tools - Smart Money Tracking
+        whale_watch_report,  # Erstellt einen detaillierten Bericht über aktuelle Whale-Aktivitäten auf Solana
+
         # Dune Analytics Tools
         get_dex_volume_rankings,  # Retrieves and ranks DEX projects by trading volume.
         get_ethereum_daily_activity,  # Retrieves daily active users and receiving addresses on Ethereum.
-        get_dex_monthly_volume_trends,  # Retrieves trends in monthly DEX trading volumes.
         get_nft_market_activity_metrics,  # Retrieves metrics on NFT market activity.
         get_crypto_sector_performance_analysis,  # Analyzes performance of different crypto sectors.
         get_bitcoin_etf_analysis,  # Analyzes Bitcoin ETF trends and data.
@@ -139,40 +156,29 @@ def import_tools():
         get_opensea_monthly_nfts_sold,
         get_nft_wash_trading_analysis,
         get_solana_dex_volume_analysis,
-        
-        
-        
-        
+        get_sunpump_recent_buys,
+        get_daily_fees_comparison,
+        get_top_solana_memecoins,
+        get_memecoin_project_rankings,
+        get_bitcoin_activity_metrics,
+        get_tether_tron_daily_volume,
+        get_trading_bot_leaderboard,
+        get_base_token_pair_metrics,
+        get_virtuals_launch_metrics,
+        get_token_holder_distribution,
         
         # Binance Tools
         get_binance_ticker,  # Retrieves the current ticker price from Binance.
         get_binance_order_book,  # Retrieves the order book for a specified cryptocurrency on Binance.
         get_binance_recent_trades,  # Retrieves recent trades for a specified cryptocurrency on Binance.
         
-        # Integration2 Tools
-        combined_technical_analysis,
-        generate_recommendation,
-        
-        
-        # Nasdaq Tools
-        get_nasdaq_data,
-        get_bitcoin_insights,
-        
         # Bitquery Tools
-        get_latest_pair_created,
-        
-        # Crypto Relative Strength Analysis
-        get_all_sectors_relative_strength,
-        get_l1_relative_strength,
-        get_l2l3_relative_strength,
-        get_blockchain_service_infra_relative_strength,
-        get_blue_chip_defi_relative_strength,
-        get_defi_3_0_relative_strength,
-        get_memecoins_relative_strength,
-        get_rwa_relative_strength,
-        get_web3_gaming_relative_strength,
-        get_decentralised_ai_relative_strength,
-        get_depin_relative_strength,
-
+        fetch_latest_pancakeswap_tokens, 
+        fetch_top_10_pumpfun_tokens, 
+        fetch_latest_solana_tokens, 
+        compare_bsc_token_transfers, 
+        fetch_bitfinex_bitcoin_transactions, 
+        get_latest_uniswap_pairs,
+        get_multichain_portfolio,
     ]
     return tools

@@ -1,10 +1,8 @@
 from typing import Dict, Any
 from enum import Enum
-from code_interpreter import generate_visualization_response_sync
 
 class IntentType(Enum):
     GPT_RESEARCH = "gpt_research"
-    VISUALIZATION = "visualization"
     GENERAL = "general"
 
 class IntentDetector:
@@ -12,19 +10,15 @@ class IntentDetector:
         self.prompt_engine = prompt_engine
         self.gpt_research_manager = gpt_research_manager
         self.intent_handlers = {
-            IntentType.GPT_RESEARCH: self.handle_gpt_research,
-            IntentType.VISUALIZATION: self.handle_visualization
+            IntentType.GPT_RESEARCH: self.handle_gpt_research
         }
 
     def detect_intent(self, user_query: str) -> IntentType:
         user_query_lower = user_query.lower()
         research_keywords = ["research", "provide more information about", "study", "investigate", "search the web", "provide in-depth insights", "explore", "coin $", "information about $"]
-        visualization_keywords = ["visualize", "provide graph", "show chart", "plot", "show me a graph of", "display data"]
         
         if any(keyword in user_query_lower for keyword in research_keywords):
             return IntentType.GPT_RESEARCH
-        elif any(keyword in user_query_lower for keyword in visualization_keywords):
-            return IntentType.VISUALIZATION
         else:
             return IntentType.GENERAL
 
@@ -36,20 +30,6 @@ class IntentDetector:
         report_type = kwargs.get('report_type', 'research_report')
         report_source = kwargs.get('report_source', 'web')
         return self.gpt_research_manager.run_gpt_research(user_query, report_type, report_source)
-
-    def handle_visualization(self, query: str, **kwargs) -> Dict[str, Any]:
-        try:
-            viz_result = generate_visualization_response_sync(query)
-            if 'image_path' in viz_result:
-                return {
-                    "type": "visualization",
-                    "content": viz_result['message'],
-                    "image_path": viz_result['image_path']
-                }
-            else:
-                return {"type": "text", "content": viz_result['message']}
-        except Exception as e:
-            return {"type": "error", "content": f"An error occurred while generating visualization: {str(e)}"}
 
     def default_handler(self, user_query: str, **kwargs) -> Dict[str, Any]:
         return {"type": "text", "content": "No specific intent handler found for your query."}

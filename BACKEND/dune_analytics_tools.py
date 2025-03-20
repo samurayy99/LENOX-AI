@@ -2,32 +2,12 @@ import os
 from dune_client.client import DuneClient
 from langchain.tools import tool
 
+
+
 DUNE_API_KEY = os.getenv('DUNE_API_KEY')
 dune = DuneClient(DUNE_API_KEY or '') 
 
-@tool
-def get_dex_volume_rankings():
-    """
-    Fetches and ranks DEX (Decentralized Exchange) projects by trading volume.
 
-    This function retrieves data on DEX trading volumes for the last 7 days and 24 hours.
-    It provides insights into the most active DEX projects and their relative market share.
-
-    Returns:
-        dict: A dictionary containing:
-            - 'Rank': The DEX's rank by volume
-            - 'Project': Name of the DEX project
-            - '7 Days Volume': Trading volume over the last 7 days in USD
-            - '24 Hours Volume': Trading volume over the last 24 hours in USD
-
-    Raises:
-        Exception: If there's an error in fetching or processing the data
-    """
-    try:
-        query_result = dune.get_latest_result(3930794)  
-        return query_result.result
-    except Exception as e:
-        return f"An error occurred while fetching DEX volume rankings: {str(e)}"
 
 @tool
 def get_ethereum_daily_activity():
@@ -52,28 +32,31 @@ def get_ethereum_daily_activity():
     except Exception as e:
         return f"An error occurred while fetching Ethereum daily activity: {str(e)}"
 
-@tool
-def get_dex_monthly_volume_trends():
-    """
-    Retrieves monthly DEX trading volume data grouped by project since 2019.
 
-    This function provides a long-term view of DEX activity, allowing for
-    analysis of trends and market share changes over time.
+@tool
+def get_dex_volume_rankings():
+    """
+    Fetches and ranks DEX (Decentralized Exchange) projects by trading volume.
+
+    This function retrieves data on DEX trading volumes for the last 7 days and 24 hours.
+    It provides insights into the most active DEX projects and their relative market share.
 
     Returns:
         dict: A dictionary containing:
-            - 'project': Name of the DEX project
-            - 'month': The month of the data point
-            - 'usd_volume': Total trading volume for the month in USD
+            - 'Rank': The DEX's rank by volume
+            - 'Project': Name of the DEX project
+            - '7 Days Volume': Trading volume over the last 7 days in USD
+            - '24 Hours Volume': Trading volume over the last 24 hours in USD
 
     Raises:
         Exception: If there's an error in fetching or processing the data
     """
     try:
-        query_result = dune.get_latest_result(3929505)
+        query_result = dune.get_latest_result(3929505)  # Make sure this query ID is correct
         return query_result.result
     except Exception as e:
-        return f"An error occurred while fetching DEX monthly volume trends: {str(e)}"
+        return f"An error occurred while fetching DEX volume rankings: {str(e)}"
+
 
 @tool
 def get_nft_market_activity_metrics():
@@ -134,21 +117,23 @@ def get_crypto_sector_performance_analysis(period='24h'):
 @tool
 def get_bitcoin_etf_analysis():
     """
-    Fetches and analyzes data on Bitcoin ETFs, including TVL, market share, and fees.
+    Fetches and analyzes comprehensive data on Bitcoin ETFs, including TVL, market share, fees, and address verification.
 
-    This function provides a comprehensive overview of various Bitcoin ETF products,
-    their performance, and market positioning.
+    This function provides a detailed overview of various Bitcoin ETF products.
 
     Returns:
-        dict: A dictionary containing:
+        dict: A dictionary containing for each ETF:
             - 'plain_issuer': Name of the ETF issuer
-            - 'issuer': Linked name of the ETF issuer
-            - 'tvl': Total Value Locked in the ETF
+            - 'issuer': Linked name of the ETF issuer (with hyperlink)
+            - 'tvl': Total Value Locked in the ETF (in BTC)
             - 'usd_value': USD value of the TVL
             - 'percentage_of_total': Market share of the ETF
             - 'etf_ticker': Ticker symbol of the ETF
             - 'percentage_fee': Management fee of the ETF
-            - 'address_source': Source of the ETF's Bitcoin address information
+            - 'address_source': Verification status of the ETF's Bitcoin addresses
+                (🟢: Proof of Reserves, 🔵: Proof of Addresses, 🟠: Unverified)
+
+    The function uses blockchain data to calculate TVL and integrates with external sources for address verification.
 
     Raises:
         Exception: If there's an error in fetching or processing the data
@@ -159,31 +144,38 @@ def get_bitcoin_etf_analysis():
     except Exception as e:
         return f"An error occurred while fetching Bitcoin ETF analysis: {str(e)}"
 
+
 @tool
 def get_ethereum_staking_analysis():
     """
-    Analyzes Ethereum staking data, including deposits, withdrawals, and net inflows for different entities.
-
-    This function provides insights into Ethereum staking trends, highlighting the
-    most active staking entities and their net positions.
+    Analyzes Ethereum staking data for various entities and sub-entities.
 
     Returns:
-        dict: A dictionary containing:
-            - 'entity': Name of the staking entity
-            - 'eth_inflow': Amount of ETH deposited for staking
-            - 'eth_principal_outflow': Amount of principal ETH withdrawn
-            - 'eth_rewards_outflow': Amount of reward ETH withdrawn
-            - 'net_inflow': Net position (inflow - outflow)
-            - 'net_inflow_excluding_rewards': Net position excluding staking rewards
+        dict: For each entity:
+            - 'ranking': Rank based on staked amount
+            - 'entity': Name of staking entity (with hyperlink if available)
+            - 'entity_just_name': Plain text name
+            - 'entity_category': Category of staking entity
+            - 'amount_staked': Total ETH staked
+            - 'amount_staked_broken_down': Detailed staked amount (sub-entities)
+            - 'validators': Number of validators
+            - 'marketshare': Percentage of total staked ETH
+            - 'ow_change': 1-week change in staked amount
+            - 'om_change': 1-month change in staked amount
+            - 'sm_change': 6-month change in staked amount
+            - 'earned_rewards': Total rewards earned
+            - 'last_deposit': Date of last deposit
+            - 'last_withdrawal': Date of last withdrawal or 'Never'
 
     Raises:
-        Exception: If there's an error in fetching or processing the data
+        Exception: If error in fetching/processing data
     """
     try:
         query_result = dune.get_latest_result(3930742)
         return query_result.result
     except Exception as e:
-        return f"An error occurred while fetching Ethereum staking analysis: {str(e)}"
+        return f"Error fetching Ethereum staking analysis: {str(e)}"
+
 
 @tool
 def get_bitcoin_top_holders_analysis():
@@ -368,6 +360,7 @@ def get_stablecoin_market_analysis():
     except Exception as e:
         return f"An error occurred while fetching stablecoin market analysis: {str(e)}"
 
+
 @tool
 def get_farcaster_token_trends():
     """
@@ -377,12 +370,12 @@ def get_farcaster_token_trends():
     frequently on the Farcaster social platform, potentially indicating emerging trends.
 
     Returns:
-        dict: A dictionary containing:
-            - 'Token_symbol': Symbol of the mentioned token
-            - 'count_cast_7days': Number of mentions in the last 7 days
-            - 'count_cast_before_7days': Number of mentions in the 7 days before the last 7 days
-            - 'rate_of_increase': Rate of increase in mentions
-            - 'trend': Trend direction ('up', 'down', or 'new')
+        dict: A dictionary containing up to 101 tokens with the following information:
+            - Token_symbol: Symbol of the mentioned token
+            - count_cast_7days: Number of mentions in the last 7 days
+            - count_cast_before_7days: Number of mentions in the 7 days before the last 7 days
+            - rate_of_increase: Rate of increase in mentions (null for new tokens)
+            - trend: Trend direction ('up', 'down', 'new', or null)
 
     Raises:
         Exception: If there's an error in fetching or processing the data
@@ -392,6 +385,8 @@ def get_farcaster_token_trends():
         return query_result.result
     except Exception as e:
         return f"An error occurred while fetching Farcaster token trends: {str(e)}"
+    
+    
 
 @tool
 def get_nft_collection_rankings():
@@ -622,3 +617,301 @@ def get_solana_dex_volume_analysis():
         return query_result.result
     except Exception as e:
         return f"An error occurred while fetching Solana DEX volume analysis: {str(e)}"
+    
+    
+@tool
+def get_sunpump_recent_buys():
+    """
+    Retrieves recent SunPump token buy transactions.
+
+    This function queries the Dune Analytics database to fetch recent buy transactions
+    for SunPump tokens on the Tron blockchain. It provides details such as the transaction
+    hash, buyer's wallet address, amount of TRX paid, and the token address.
+
+    Returns:
+        dict: A dictionary containing:
+            - 'Transaction': Link to view the transaction on Tronscan
+            - 'Wallet': The buyer's wallet address
+            - 'Type': Always "Buy" for this query
+            - 'TRX Paid': Amount of TRX paid for the transaction
+            - 'Token address': Link to view the token on SunPump website
+            - 'Times bought': Number of times this token has been bought in the period
+
+    Raises:
+        Exception: If there's an error in fetching or processing the data
+    """
+    try:
+        query_result = dune.get_latest_result(4002974)
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching SunPump recent buys data: {str(e)}"
+    
+    
+    
+@tool
+def get_daily_fees_comparison():
+    """
+    Fetches and compares daily fees for FourMeme, SunPump, and Pumpdotfun platforms.
+
+    This function retrieves daily fee data for three different platforms (FourMeme on BNB chain,
+    SunPump on TRON, and Pumpdotfun on Solana) from August 11, 2024 onwards. It calculates
+    daily revenue in USD and cumulative revenue for each platform.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing:
+            - 'date': The date of the fee collection
+            - 'platform': The name of the platform (FourMeme, SunPump, or Pumpdotfun)
+            - 'daily_revenue': Daily revenue in the platform's native token
+            - 'daily_revenue_usd': Daily revenue converted to USD
+            - 'cumulative_revenue_usd': Cumulative revenue in USD since August 11, 2024
+
+    Raises:
+        Exception: If there's an error in fetching or processing the data.
+    """
+    try:
+        query_result = dune.get_latest_result(4017952)
+        return query_result.result
+    except Exception as e:
+        raise Exception(f"An error occurred while fetching daily fees comparison: {str(e)}")
+    
+    
+@tool
+def get_top_solana_memecoins():
+    """
+    Retrieves the top 10 Solana memecoins created in the last month, ranked by trading volume.
+
+    Returns:
+        dict: Contains for each memecoin:
+            - 'birdeye': Link to Birdeye info
+            - 'dexscreener': Link to Dexscreener info
+            - 'rugcheck': Link to Rugcheck analysis
+            - 'created_at': Token creation date
+            - 'symbol': Token symbol
+            - 'name': Token name
+            - 'token': Token address
+            - 'first_trade': First trade timestamp
+            - 'traders_count': Number of unique traders
+            - 'trades_count': Total number of trades
+            - 'trade_volume': Total trading volume in USD
+            - 'isMintable': If token supply can be increased ('❗' or '❎')
+            - 'isFreezable': If token transfers can be frozen ('❗' or '❎')
+            - 'isMutable': If token metadata can be changed ('❗' or '❎')
+            - 'status': Trading activity status ('Active' or 'Inactive')
+
+    Raises:
+        Exception: If there's an error in fetching or processing the data.
+    """
+    try:
+        query_result = dune.get_latest_result(4034915)
+        return query_result.result
+    except Exception as e:
+        raise Exception(f"An error occurred while fetching daily fees comparison: {str(e)}")
+    
+    
+@tool
+def get_memecoin_project_rankings():
+    """
+    Fetches ranking data for MemeSeason2024 memecoin projects.
+
+    Returns:
+        Dict[str, Any]: Contains:
+            'Project': Name with hyperlink
+            'Symbol': With explorer link
+            'Points': For ranking
+            '🔰': Overall rank
+            'Qualify': ✔️ or ❌
+            '🏆': 🥇, 🥈, 🥉, or 🏅
+            'Deployer 💰': USD reward
+            'Holders 💰': USD reward
+            'Liquidity 💧': Avg
+            'Volume 💱': Trading
+            'Market Cap (💲)'
+            'Total Supply (🤡)'
+            'Current 💧': Liquidity
+            '24h ΔLiquidity': Change
+            '24h ΔVolume': Change
+            '24h ΔPrice': % Change
+            'Current Price'
+            'Avg. 3d Price'
+
+    Raises:
+        Exception: On fetch/process error
+    """
+    try:
+        query_result = dune.get_latest_result(4037624)
+        return query_result.result
+    except Exception as e:
+        raise Exception(f"Error fetching memecoin rankings: {str(e)}")
+    
+    
+
+@tool
+def get_bitcoin_activity_metrics():
+    """
+    Fetches Bitcoin activity metrics including active addresses and transaction volume.
+
+    Returns:
+        dict: A dictionary containing:
+            - 'time': The timestamp for the data point
+            - 'volume': The transaction volume in USD
+            - 'active_address': The number of active addresses
+
+    Raises:
+        Exception: If there's an error in fetching or processing the data.
+    """
+    try:
+        query_result = dune.get_latest_result(4040951)
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching Bitcoin activity metrics: {str(e)}"
+    
+    
+@tool
+def get_tether_tron_daily_volume():
+    """
+    Retrieves the daily transaction volume of Tether (USDT) on the Tron blockchain.
+
+    This function queries Dune Analytics to fetch the total daily transaction volume of USDT on Tron,
+    providing insights into the network's liquidity and activity level.
+
+    Returns:
+        dict: A dictionary containing:
+            - 'day': The date of the transactions (truncated to day)
+            - 'label': Always 'USDT' for this query
+            - 'Volume': The total transaction volume of USDT for that day
+
+    The results are ordered by date in descending order, with the most recent day first.
+
+    Raises:
+        Exception: If there's an error in fetching or processing the data
+    """
+    try:
+        query_result = dune.get_latest_result(4053687)
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching Tether Tron daily volume: {str(e)}"
+    
+
+@tool
+def get_trading_bot_leaderboard():
+    """
+    Fetches and ranks trading bot performance data.
+
+    Returns a leaderboard of trading bots with key metrics including volume, revenue, user base, and cross-chain activity. Provides insights into the most active and successful trading bots.
+
+    Returns:
+        dict: Contains for each bot:
+            'volumeRank': Rank by volume (with medal emojis for top 3)
+            'bot': Bot name
+            'dashboard': Dashboard link
+            'volumeUSD': Total volume in USD
+            'volume7dUSD': 7-day volume in USD
+            'numberOfUsers': Unique users count
+            'botRevenueUSD': Bot revenue in USD
+            'numberOfTrades': Total trades
+            'platforms': Supported platforms
+            'blockchains': Supported blockchains
+            'numberOfSupportedBlockchains': Count of supported chains
+            'activityDays': Active days
+            'averageVolumePerDayUSD': Avg daily volume
+            'averageVolumePerUserUSD': Avg volume per user
+            'averageVolumePerTradeUSD': Avg volume per trade
+
+    Raises:
+        Exception: On fetch/process error
+    """
+    try:
+        query_result = dune.get_latest_result(4077873)
+        return query_result.result
+    except Exception as e:
+        return f"Error fetching trading bot leaderboard: {str(e)}"
+    
+    
+    
+@tool
+def get_base_token_pair_metrics():
+    """
+    Analyzes trading activity for token pairs on Base blockchain with volume and user metrics.
+
+    Returns:
+        dict: Contains for each token pair:
+            - 'Token Pair': Trading pair name
+            - '1/7/30 Day USD Volume': Trading volumes for each period
+            - '1/7/30 Day DAU': Daily Active Users for each period
+            - 'Previous Period Volumes': For 1d/7d/30d comparisons
+            - Volume Change (%): Percentage changes across timeframes
+
+    Results ordered by 7-day volume (desc), top 250 pairs shown.
+
+    Raises:
+        Exception: If error in fetching/processing data
+    """
+    try:
+        query_result = dune.get_latest_result(4350809)
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching Base token pair metrics: {str(e)}"
+    
+    
+   
+   
+@tool
+def get_virtuals_launch_metrics():
+    """
+    Analyzes daily metrics for Virtuals.io AI token launches on Base blockchain.
+
+    Returns:
+        dict: Contains daily metrics:
+            - 'day': Date of metrics
+            - 'num_tokens': New tokens launched that day
+            - 'unique_addresses': Unique deployers
+            - 'virtual_spent': Amount of VIRTUAL tokens spent
+            - 'cumulative_spent': Total VIRTUAL spent to date
+            - 'total_tokens_launched': Cumulative tokens launched
+            - 'num_grad_tokens': Graduated tokens that day
+            - 'cumulative_grad_tokens': Total graduated tokens
+            - 'avg_ownership': Average ownership percentage
+
+    Results ordered by date descending, starting from 2024-11-01.
+
+    Raises:
+        Exception: If error in fetching data
+    """
+    try:
+        query_result = dune.get_latest_result(4354271)  # Replace with actual query ID
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching Virtuals.io launch metrics: {str(e)}" 
+    
+    
+    
+    
+@tool
+def get_token_holder_distribution():
+    """
+    Analyzes token holder distribution across different balance ranges.
+
+    Returns:
+        dict: Contains for each balance range:
+            - 'lvl': Tier level (1-6)
+            - 'label': Balance range (e.g., '0-100', '100-1,000', etc.)
+            - 'wallets': Number of wallets in this range
+            - 'total_tokens': Total tokens held in this range
+            - 'percentage': Percentage of total supply in this range
+
+    The analysis covers these ranges:
+    - 0-100 tokens
+    - 100-1,000 tokens
+    - 1,000-10,000 tokens
+    - 10,000-100,000 tokens
+    - 100,000-600,000 tokens
+    - over 600,000 tokens
+
+    Raises:
+        Exception: If error in fetching data
+    """
+    try:
+        query_result = dune.get_latest_result(4359001)
+        return query_result.result
+    except Exception as e:
+        return f"An error occurred while fetching token holder distribution: {str(e)}"

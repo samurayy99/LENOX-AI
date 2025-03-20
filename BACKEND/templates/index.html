@@ -1,101 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, maximum-scale=1, user-scalable=no">
-  <title>Lenox Chat & Dashboard</title>
-  <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&display=swap" rel="stylesheet">
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dr. Degen - Crypto Rehab</title>
+    <link href="{{ url_for('static', filename='styles.css') }}?v=1.1" rel="stylesheet">
+    <link rel="icon" href="{{ url_for('static', filename='images/logo1.png') }}" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
 </head>
-
 <body>
-  <div class="chat-container">
-    <div class="chat-header">
-      <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Lenox Chat Logo" class="chat-logo">
-      <h2>Lenox AI</h2>
-      <!-- Separate Dashboard Access Button -->
-      <div class="dashboard-button-container">
-        <button class="dashboard-btn" onclick="location.href='/dashboard/'">Dashboard (Experimental)</button>
-      </div>
-
-      <!-- Dropdown Menu for exploring features -->
-      <div class="dropdown">
-        <button class="dropbtn">Explore Features</button>
-        <div class="dropdown-content">
-          <a href="#">Fetch and rank the DEX and provide your Insights to the numbers?</a>
-          <a href="#">Reveal the truth behind NFT wash trading: Which marketplaces have the highest integrity?</a>
-          <a href="#">Which narratives are outperforming Bitcoin and the overall market in the last 24 hours?</a>
-          <a href="#"></a>
-          <a href="#">Fetch and rank the DEX and provide your Insights to the numbers?</a>
-          <a href="#">List the daily active users and receiving addresses for ETH over the last 7 days.</a>
-          <a href="#">Plot the Bitcoin chart for July 2024.</a>
-          <a href="#">How has the price of Bitcoin evolved over the last 24 hours, and what do the latest Reddit discussions and news say about it?</a>
-          <a href="#">Conduct a comprehensive analysis of the DePIN (Decentralized Physical Infrastructure) market within the cryptocurrency sector, including relative strength, funding trends, and adoption metrics.</a>
-          <a href="#">Investigate the impact of whale transactions on market volatility over the last 24 hours for Shiba Inu and Ethereum, and predict potential price movements based on historical patterns.</a>
-          <a href="#">Uncover the hidden gems: Which emerging AI tokens are experiencing explosive growth in trading volume?</a>
-          <a href="#">Fetche weekly NFT market volume and activity metrics across major marketplaces and provide your two favorits for a short-term investment.</a>
-          <a href="#">Ethereum staking wars: Which entities are leading in deposits and net inflows?</a>
-          <a href="#">Fetch data on Bitcoin ETFs, including TVL, market share, and fees and provide an analysis.</a>
-          <a href="#">Research and provide a comprehensive analysis of the DePIN market within the cryptocurrency sector.</a>
-          <a href="#">Analyze Ethereum staking data, including deposits, withdrawals, and net inflows for different entities.</a>
-          <a href="#">Provide detailed insights on memecoin trading activity.</a>
-          <a href="#">Plot the monthly returns of Bitcoin compared to traditional assets like gold and the S&P 500 for the year 2023.</a>
-          <a href="#">Make an analysis on bitcoin top holders.</a>
-          <a href="#">Analyze polygon gaming metrics and provide a comprehensive analysis.</a>
-          <a href="#">What's the total number of cryptocurrencies in the market right now, and how does this compare to last month?</a>
-          <a href="#">Provide a comprehensive overview of the tokenization market.</a>
-          <a href="#">Analyze the relative performance of different crypto sectors over the last 30 days.</a>
-          <a href="#">Compare the trading signals for Bitcoin on different top exchanges.</a>
-          <a href="#">What are the most recent large bitcoin transactions over $10 Million USD?</a>
-          <a href="#">Which L1 blockchain is showing the strongest relative strength over the last 30 days?</a>
-          <a href="#">How are Blue Chip DeFi projects performing in terms of relative strength today?</a>
-          <a href="#">Can you provide the relative strength analysis for Memecoins in the last 24 hours?</a>
-          <a href="#">How is the Real World Assets (RWA) sector performing in terms of relative strength over the last month?</a>
-          <a href="#">Analyze performance data for various cryptocurrency categories.</a>
-          <a href="#">Provide a comrehensive analysis of token mentions in Farcaster posts over tha past week.</a>
-          <a href="#">Retrieve volume metrics for decentralized exchanges (DEX) on Solana.</a>
-          <a href="#">Analyze the current price of Binance Coin against its historical prices and provide a comment.</a>
-          <a href="#">Retrieve the daily trading volume in USD on OpenSea for July 2024.</a>
-          <a href="#">Rank top NFT collections by trading volume over the last week.</a>
-          <a href="#">Fetch the latest news from CryptoPanic.</a>
-          <a href="#">Retrieve the list of trending cryptocurrencies on CoinGecko.</a>
-          <a href="#">Fetch 24h OHLCV data for Ripple and provide your comment.</a>
-          <a href="#">Provide the latest posts from r/CryptoCurrency subreddit and comment each post.</a>
-          <a href="#">Search youtube for the latest video on solana and analyze the content.</a>
-          <a href="#">Provide information about AI-related tokens with significant trading volume.</a>
-          <a href="#">Provide in-depth insights into the NFT market and prepare a comprehensive investment report.</a>
-          <a href="#">Give me the trading volume of Dogecoin for each day in the past week.</a>
-          <a href="#">Can you give me the historical annual returns for Bitcoin?</a>
-          <a href="#">Fetch the latest pair created on the Ethereum network.</a>
-          </a>
+    <div class="container">
+        <header>
+            <div class="logo-section">
+                <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Dr. Degen Logo" class="logo-img">
+                <div class="logo">
+                    <h1>Dr. Degen</h1>
+                    <p class="tagline">Your Memecoin Alpha Guru</p>
+                </div>
+            </div>
+            
+            <div class="dropdown">
+                <button class="dropbtn">Explore Features</button>
+                <div class="dropdown-content">
+                    <a href="#">Compare the relative strength of all crypto sectors over the last 90 days, highlighting which sectors have shown the most resilience and growth potential.</a>
+                    <a href="#">Analyze the trading volumes of decentralized exchanges on Solana over the past 24 hours, 7 days, and 30 days.</a>
+                    <a href="#">Analyze the current market status of popular memecoins across different blockchains.</a>
+                    <a href="#">Perform a comprehensive technical analysis for Bitcoin (BTC) using the latest price data.</a>
+                    <a href="#">Provide a comprehensive relative strength analysis of all crypto sectors over the past 24 hours.</a>
+                    <!-- Weitere Dropdown-Einträge können hier eingefügt werden -->
+                </div>
+            </div>
+        </header>
+        
+        <div class="chat-container">
+            <div id="chat" class="chat-messages"></div>
+            
+            <div class="input-area">
+                <textarea id="query" placeholder="Ask Dr. Degen anything about crypto, trading, or your degen habits..."></textarea>
+                <button id="sendButton">SEND IT</button>
+            </div>
         </div>
-      </div>
+        
+        <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+            <div class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
     </div>
-    <div id="chat-messages" class="chat-messages"></div>
-    <div id="visualization" class="visualization-placeholder bot-message"></div>
-    <div class="chat-input-container">
-      <textarea id="query" class="chat-input" placeholder="Ask Lenox something..." autofocus></textarea>
-      <button id="sendButton">Send</button>
-      <div class="audio-control">
-        <button id="startRecording">Start Recording</button>
-        <button id="stopRecording" disabled>Stop Recording</button>
-      </div>
-    </div>
-    <div class="upload-container">
-      <form id="uploadForm" enctype="multipart/form-data">
-        <label for="fileUpload">Upload Chart:</label>
-        <input type="file" id="fileUpload" name="file" multiple>
-        <button type="submit">Upload</button>
-      </form>
-    </div>
-  </div>
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
-  <div id="loadingIndicator" class="loading-indicator" style="display: none;">
-    <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Loading...">
-  </div>
-</body>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=1.1"></script>
+</body>
 </html>
