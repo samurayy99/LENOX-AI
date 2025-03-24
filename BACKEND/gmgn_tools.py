@@ -1,435 +1,409 @@
-import logging
-import time
-from datetime import datetime
-from typing import Dict, List, Any
-from tabulate import tabulate
-from gmgn_wrapper import gmgn  # Nutzt GMGN Wrapper
+# gmgn_tools.py
+import time, logging
+from typing import Dict, List, Any, Union
+from dotenv import load_dotenv
 from langchain.tools import tool
+from gmgn_wrapper import gmgn
 
-# Logging Setup - Reduziere Level für Produktion
-logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
+# === ENV & CONFIG ===
+load_dotenv()
+# GMGN Client
+gmgn_client = gmgn()
 
-# Cache-Optimierung mit unterschiedlichen Expiry-Zeiten
-CACHE = {}
-CACHE_EXPIRY_MAP = {
-    "whale_trades": 600,    # 10 Minuten
-    "trending_tokens": 120, # 2 Minuten
-    "whale_buys": 300,      # 5 Minuten
-    "smart_money": 600,     # 10 Minuten
-}
-DEFAULT_EXPIRY = 300  # 5 Minuten als Standard
+# === LOGGING ===
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("gmgn_tools")
 
-def format_timestamp(ts: Any) -> str:
-    """Konvertiert Unix-Timestamp in lesbares Format oder gibt 'N/A' zurück."""
-    try:
-        return datetime.fromtimestamp(int(float(ts or 0))).strftime('%Y-%m-%d %H:%M')
-    except (ValueError, TypeError):
-        return "N/A"
+# === CACHE SYSTEM ===
+CACHE: Dict[str, tuple[Any, float]] = {}
+CACHE_TTL = 300  # 5 minutes
 
-def clear_expired_cache() -> None:
-    """Remove old cache entries."""
-    current_time = time.time()
-    expired_keys = []
-    
-    for key_to_remove, (_, timestamp, expiry) in CACHE.items():
-        if current_time - timestamp > expiry:
-            expired_keys.append(key_to_remove)
-            
-    for key_to_remove in expired_keys:
-        del CACHE[key_to_remove]
-
-def cache_result(key: str, result: Any, category: str = "default") -> Any:
-    """Cache API result mit flexiblem Timeout je nach Kategorie."""
-    expiry = CACHE_EXPIRY_MAP.get(category, DEFAULT_EXPIRY)
-    CACHE[key] = (result, time.time(), expiry)
-    return result
-
-def get_cached_result(key: str) -> Any:
-    """Get cached result if available and not expired."""
+def _cache_get(key: str) -> Any:
+    """Get data from cache if exists and not expired"""
     if key in CACHE:
-        result, timestamp, expiry = CACHE[key]
-        if time.time() - timestamp < expiry:
-            return result
+        data, ts = CACHE[key]
+        if time.time() - ts < CACHE_TTL:
+            logger.debug(f"Cache hit for {key}")
+            return data
     return None
 
-class WhaleWatch:
-    """ Klasse für Whale-Trading-Analysen auf Solana. """
-    
-    def __init__(self):
-        """ Initialisiert die Whale Watch Klasse mit GMGN API Wrapper. """
-        self.gmgn = gmgn()
-        self.logger = logging.getLogger("WhaleWatch")
+def _cache_set(key: str, data: Any) -> None:
+    """Store data in cache with timestamp"""
+    CACHE[key] = (data, time.time())
 
-    def get_whale_trades(self, timeframe: str = "7d", wallet_tag: str = "smart_degen") -> List[Dict]:
-        """Holt aktuelle Whale-Trades auf Solana."""
-        try:
-            self.logger.info(f"Fetching whale trades for {timeframe} with tag {wallet_tag}")
-            cache_key = f"whale_trades_{timeframe}_{wallet_tag}"
-            cached = get_cached_result(cache_key)
-            if cached:
-                return cached
-            
-            # API-Aufruf    
-            response = self.gmgn.getTrendingWallets(timeframe=timeframe, walletTag=wallet_tag)
-            
-            # Fehlerbehandlung für Response-Format
-            if not response:
-                self.logger.warning("Empty response from getTrendingWallets API")
-                return []
-                
-            # Rank-Key existiert nicht in manchen Fällen
-            rank_data = response.get('rank', [])
-            if not rank_data and isinstance(response, list):
-                rank_data = response  # Direkte Liste verwenden
-                
-            if not rank_data:
-                self.logger.warning("No rank data found in response")
-                return []
-
-            whale_trades = []
-
-            for wallet in rank_data:
-                if not isinstance(wallet, dict):
-                    continue
-                    
-                # Optimiertes sicheres Extrahieren von Daten
-                buy_count = int(wallet.get('buy', 0) or 0)
-                sell_count = int(wallet.get('sell', 0) or 0)
-                trade_count = buy_count + sell_count
-                
-                # Aktivitätsstufe berechnen
-                activity_level = "🟢 High" if trade_count > 20 else "🟡 Medium" if trade_count > 10 else "🔴 Low"
-                
-                # Profit mit einfachem Fehler-Handling
-                realized_profit = float(wallet.get('realized_profit', 0) or 0)
-                profit_per_trade = realized_profit / max(1, trade_count) if trade_count > 0 else 0
-                
-                # Win-Rate vereinfacht
-                win_rate = float(wallet.get('winrate_7d', 0) or 0) * 100
-                
-                # Timestamp mit Helper-Funktion
-                last_active_str = format_timestamp(wallet.get('last_active'))
-                
-                whale_trades.append({
-                    "wallet_address": wallet.get('wallet_address', 'N/A'),
-                    "profit_sol": round(realized_profit, 2),
-                    "profit_per_trade": round(profit_per_trade, 3),
-                    "win_rate": round(win_rate, 1),
-                    "buy_trades": buy_count,
-                    "sell_trades": sell_count,
-                    "trades_total": trade_count,
-                    "activity": activity_level,
-                    "last_active": last_active_str,
-                })
-
-            result = sorted(whale_trades, key=lambda x: x["profit_sol"], reverse=True)
-            return cache_result(cache_key, result, "whale_trades")
-
-        except Exception as e:
-            self.logger.error(f"Error fetching whale trades: {str(e)}")
-            return []
-
-    def get_whale_buys(self, wallet_address: str, period: str = "7d") -> Dict:
-        """Holt alle Käufe eines bestimmten Whales."""
-        try:
-            self.logger.info(f"Fetching trade history for {wallet_address} ({period})")
-            cache_key = f"whale_buys_{wallet_address}_{period}"
-            cached = get_cached_result(cache_key)
-            if cached:
-                return cached
-            
-            # API-Aufruf
-            response = self.gmgn.getWalletInfo(walletAddress=wallet_address, period=period)
-
-            if not response:
-                return {}
-                
-            # Optimiertes Extrahieren von Daten
-            realized_profit = float(response.get("realized_profit", 0) or 0)
-            winrate = float(response.get("winrate", 0) or 0) * 100
-            
-            trades = response.get("trades", [])
-            if not isinstance(trades, list):
-                trades = []
-
-            result = {
-                "wallet_address": wallet_address,
-                "realized_profit": round(realized_profit, 2),
-                "winrate": round(winrate, 1),
-                "trades": trades
-            }
-            
-            return cache_result(cache_key, result, "whale_buys")
-
-        except Exception as e:
-            self.logger.error(f"Error fetching whale buy history: {str(e)}")
-            return {}
-            
-    def get_trending_tokens(self, timeframe: str = "1h", limit: int = 5) -> List[Dict]:
-        """Holt trending Coins mit Smart Money Volumen."""
-        try:
-            self.logger.info(f"Fetching trending coins for {timeframe}")
-            cache_key = f"trending_coins_{timeframe}_{limit}"
-            cached = get_cached_result(cache_key)
-            if cached:
-                return cached
-            
-            # Direkten API-Aufruf machen, aber mit besserer Fehlerbehandlung
-            response = self.gmgn.getTrendingTokens(timeframe=timeframe)
-            
-            # Verbesserte Fehlerbehandlung - Log für Debugging
-            if not response:
-                self.logger.warning(f"Empty trending tokens response for timeframe {timeframe}")
-                # Versuche andere Zeitfenster
-                if timeframe != "24h":
-                    self.logger.info(f"Trying fallback timeframe 24h")
-                    return self.get_trending_tokens("24h", limit)
-                return []
-            
-            trending_coins = []
-            
-            # Direkte Verarbeitung der Root-Elemente der API-Antwort
-            # Dies funktioniert mit allen möglichen Strukturen
-            if isinstance(response, dict):
-                # Suche nach einer Liste in den Schlüsseln
-                for key_name, value in response.items():
-                    if isinstance(value, list) and value and isinstance(value[0], dict):
-                        for token in value[:limit]:
-                            trending_coins.append(self._process_token_data(token))
-                        break
-                
-                # Falls keine Liste gefunden, prüfe auf direkte Token-Daten
-                if not trending_coins and "token_symbol" in response:
-                    trending_coins.append(self._process_token_data(response))
-                
-                # Spezielle Behandlung für 'swaps'-Schlüssel, der ein Dict sein könnte
-                swaps_data = response.get('swaps')
-                if not trending_coins and isinstance(swaps_data, dict):
-                    # Hole die Werte aus dem Dict als Liste
-                    swaps_list = list(swaps_data.values())
-                    for token in swaps_list[:limit]:
-                        if isinstance(token, dict):
-                            trending_coins.append(self._process_token_data(token))
-            
-            elif isinstance(response, list):
-                # Direkte Liste von Tokens
-                for token in response[:limit]:
-                    if isinstance(token, dict):
-                        trending_coins.append(self._process_token_data(token))
-            
-            # Sortiere nach Volume
-            result_tokens = sorted(trending_coins, key=lambda x: x["volume_usd"], reverse=True)
-            return cache_result(cache_key, result_tokens, "trending_tokens")
-
-        except Exception as e:
-            self.logger.error(f"Error fetching trending coins: {str(e)}")
-            return []
-    
-    def _process_token_data(self, token: Dict) -> Dict:
-        """Helfer-Methode zur Verarbeitung von Token-Daten"""
-        return {
-            "token_symbol": token.get('token_symbol', 'UNKNOWN'),
-            "token_address": token.get('token_address', 'N/A'),
-            "price_usd": float(token.get('price_usd', 0) or 0),
-            "volume_usd": float(token.get('volume_usd', 0) or 0),
-            "buys": int(token.get('buys', 0) or 0),
-            "sells": int(token.get('sells', 0) or 0),
-            "price_change": float(token.get('price_change', 0) or 0) * 100
-        }
-
-    def get_smart_money_tokens(self, top_whales: int = 5) -> List[Dict]:
-        """Identifiziert die beliebtesten Tokens unter Smart Money Wallets."""
-        try:
-            cache_key = f"smart_money_tokens_{top_whales}"
-            cached = get_cached_result(cache_key)
-            if cached:
-                return cached
-            
-            # Hole aktive Whales zuerst
-            all_whales = self.get_whale_trades("7d")
-            active_whales = [w for w in all_whales if w["trades_total"] > 0]
-            
-            # Wenn wir nicht genug aktive Whales haben, ergänze mit inaktiven
-            whales = active_whales[:top_whales]
-            if len(whales) < top_whales:
-                inactive_whales = [w for w in all_whales if w not in active_whales]
-                whales.extend(inactive_whales[:top_whales - len(whales)])
-            
-            if not whales:
-                self.logger.warning("No whale data available for token analysis")
-                return []
-                
-            # Temporärer Cache für Wallet-Infos, um doppelte API-Calls zu vermeiden
-            wallet_info_cache = {}
-            
-            # Hole die Trades der Top Whales
-            all_tokens: Dict[str, Dict[str, Any]] = {}
-            
-            for idx, whale in enumerate(whales):
-                wallet_address = whale.get("wallet_address")
-                if not wallet_address:
-                    continue
-                
-                # Überprüfen, ob Wallet-Info bereits abgerufen wurde
-                if wallet_address in wallet_info_cache:
-                    whale_buys = wallet_info_cache[wallet_address]
-                else:
-                    whale_buys = self.get_whale_buys(wallet_address)
-                    wallet_info_cache[wallet_address] = whale_buys
-                
-                # Sleep nur alle 5 Calls, um API-Last zu reduzieren
-                if idx > 0 and idx % 5 == 0:
-                    time.sleep(0.2)
-                
-                if not whale_buys or "trades" not in whale_buys or not isinstance(whale_buys["trades"], list):
-                    continue
-                    
-                for trade in whale_buys["trades"]:
-                    if not isinstance(trade, dict) or trade.get("action") != "buy":
-                        continue
-                        
-                    token_symbol = trade.get("token_symbol", "UNKNOWN")
-                    token_address = trade.get("token_address", "N/A")
-                    
-                    if token_symbol not in all_tokens:
-                        all_tokens[token_symbol] = {
-                            "symbol": token_symbol,
-                            "address": token_address,
-                            "count": 0,
-                            "unique_whales": set(),
-                            "last_bought": 0
-                        }
-                    
-                    all_tokens[token_symbol]["count"] += 1
-                    all_tokens[token_symbol]["unique_whales"].add(wallet_address)
-                    
-                    # Update last bought time - vereinfacht
-                    trade_time = int(float(trade.get("timestamp", 0) or 0))
-                    if trade_time > all_tokens[token_symbol]["last_bought"]:
-                        all_tokens[token_symbol]["last_bought"] = trade_time
-            
-            # Formatiere die Ergebnisse - optimiert mit List Comprehension
-            smart_money_tokens = [
-                {
-                    "symbol": t["symbol"],
-                    "address": t["address"],
-                    "buy_count": t["count"],
-                    "whale_count": len(t["unique_whales"]),
-                    "last_bought": format_timestamp(t["last_bought"])
-                }
-                for t in all_tokens.values() if t["count"] > 0
-            ]
-            
-            # Sortiere nach Anzahl der Whales und dann nach Anzahl der Käufe
-            result = sorted(smart_money_tokens, key=lambda x: (x["whale_count"], x["buy_count"]), reverse=True)
-            return cache_result(cache_key, result, "smart_money")
-            
-        except Exception as e:
-            self.logger.error(f"Error analyzing smart money tokens: {str(e)}")
-            return []
-
-    def generate_whale_report(self, whales_limit: int = 10, trending_timeframe: str = "1h") -> str:
-        """Erstellt einen Whale-Trade-Report mit allen relevanten Daten."""
-        # Hole und filtre Daten
-        whales = self.get_whale_trades("7d")  # 7d für bessere Daten
-        trending = self.get_trending_tokens(timeframe=trending_timeframe)
-        smart_money_tokens = self.get_smart_money_tokens(top_whales=min(5, whales_limit))
-
-        if not whales:
-            return "❌ **Keine Whale-Trades gefunden!** API möglicherweise nicht erreichbar."
-
-        report = "**🐳 Whale Watch Report – Aktuelle Smart Money Bewegungen**\n\n"
-
-        # Top Whales mit Ranking Emojis
-        report += "📊 **Top Whales nach Profit (SOL):**\n"
-        report += "```\n"
-        report += tabulate(
-            [[f"{'🥇' if idx == 0 else '🥈' if idx == 1 else '🥉' if idx == 2 else f'{idx+1}'}",
-              w["wallet_address"][:10] + "...", 
-              w["profit_sol"], 
-              w["profit_per_trade"],
-              f"{w['win_rate']}%", 
-              f"{w['buy_trades']}/{w['sell_trades']}", 
-              w["activity"]]
-             for idx, w in enumerate(whales[:whales_limit])],
-            headers=["#", "Wallet", "Profit (SOL)", "Profit/Trade", "Win Rate", "Buys/Sells", "Activity"],
-            tablefmt="pretty"
-        )
-        report += "\n```\n"
-
-        # Trending Coins mit Prüfung
-        if trending:
-            report += "\n🔥 **Trending Coins mit Smart Money-Volumen:**\n"
-            report += "```\n"
-            report += tabulate(
-                [[t["token_symbol"], f"${t['price_usd']:.6f}", f"${t['volume_usd']:.2f}", 
-                  f"{t['price_change']:.2f}%", f"{t['buys']}/{t['sells']}"]
-                 for t in trending[:5]],
-                headers=["Token", "Preis (USD)", "Volume (USD)", "Change", "Buys/Sells"],
-                tablefmt="pretty"
-            )
-            report += "\n```\n"
-        else:
-            report += "\n⚠️ **Trending Coin-Daten nicht verfügbar**\n"
-            report += "Versuche später erneut oder mit einem anderen Zeitfenster (1h, 6h, 24h).\n"
-            
-        # Smart Money Tokens mit Prüfung
-        if smart_money_tokens:
-            report += "\n🚀 **Beliebte Smart Money Tokens:**\n"
-            report += "```\n"
-            report += tabulate(
-                [[t["symbol"], t["whale_count"], t["buy_count"], t["last_bought"]]
-                 for t in smart_money_tokens[:5]],
-                headers=["Token", "Whales", "Käufe", "Zuletzt gekauft"],
-                tablefmt="pretty"
-            )
-            report += "\n```\n"
-        else:
-            report += "\n⚠️ **Smart Money Token-Daten nicht verfügbar**\n"
-            report += "Möglicherweise keine ausreichenden Wallet-Transaktionsdaten vorhanden.\n"
-
-        # Filtre aktive Wallets für bessere Zusammenfassung
-        active_whales = [w for w in whales[:whales_limit] if w["trades_total"] > 0]
-        
-        # Zusammenfassung
-        report += "\n📈 **Zusammenfassung:**\n"
-        if active_whales:
-            # Berechne Durchschnitte nur für aktive Wallets
-            avg_profit = sum(w["profit_sol"] for w in active_whales) / len(active_whales)
-            avg_profit_per_trade = sum(w["profit_per_trade"] for w in active_whales) / len(active_whales)
-            avg_win_rate = sum(w["win_rate"] for w in active_whales) / len(active_whales)
-            
-            report += f"- Durchschnittlicher Profit (aktive Wallets): **{avg_profit:.2f} SOL** (pro Trade: **{avg_profit_per_trade:.3f} SOL**)\n"
-            report += f"- Durchschnittliche Win Rate (aktive Wallets): **{avg_win_rate:.1f}%**\n"
-        else:
-            # Falls keine aktiven Wallets, zeige Gesamt-Statistik
-            avg_profit = sum(w["profit_sol"] for w in whales[:whales_limit]) / min(whales_limit, len(whales))
-            report += f"- Durchschnittlicher Profit (alle Whales): **{avg_profit:.2f} SOL**\n"
-            report += f"- Hinweis: Die meisten Top-Wallets zeigen aktuell geringe Aktivität.\n"
-        
-        if smart_money_tokens:
-            report += f"- Aktueller Smart Money Favorit: **{smart_money_tokens[0]['symbol']}** "
-            report += f"(von **{smart_money_tokens[0]['whale_count']}** Whales gekauft)\n"
-            
-        report += f"- Report erstellt: **{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**\n"
-
-        return report
-
-
-@tool
-def whale_watch_report(whales_limit: int = 10, trending_timeframe: str = "1h"):
-    """
-    🚀 **Live Whale Watch Report für Solana Smart Money Trades!**
+def _parse_args(arg_str: str, expected_args: List[str], defaults: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse space-separated string arguments for LangChain tool invocation
     
     Args:
-        whales_limit (int): Anzahl der Top-Whales im Report (Standard: 10).
-        trending_timeframe (str): Zeitraum für Trending-Tokens ("1m", "5m", "1h", "6h", "24h").
-    
-    **Enthält:**
-    - 🏆 **Top Whales mit Performance-Ranking** (🥇🥈🥉) und Aktivitätsstufen
-    - 📊 **Profit pro Trade & Win Rate** für besseren Überblick
-    - 🔥 **Trending Coins** mit Smart-Money-Volumen und Preisentwicklung
-    - 🚀 **Smart Money Token-Liste** mit aktuellen Whale-Favoriten
+        arg_str: The space-separated string of arguments
+        expected_args: List of argument names in order
+        defaults: Default values for each argument
+        
+    Returns:
+        Dictionary of parsed arguments
     """
-    whale_watcher = WhaleWatch()
-    return whale_watcher.generate_whale_report(whales_limit=whales_limit, trending_timeframe=trending_timeframe)
+    args = arg_str.split() if arg_str else []
+    result = defaults.copy()
+    
+    # Apply provided arguments
+    for i, value in enumerate(args):
+        if i < len(expected_args):
+            arg_name = expected_args[i]
+            # Convert to appropriate type based on default
+            if arg_name in defaults:
+                default_type = type(defaults[arg_name])
+                try:
+                    if default_type == bool:
+                        result[arg_name] = value.lower() in ("yes", "true", "t", "1")
+                    else:
+                        result[arg_name] = default_type(value)
+                except ValueError:
+                    # If conversion fails, keep as string
+                    result[arg_name] = value
+            else:
+                # No default, just use as string
+                result[arg_name] = value
+    
+    return result
+
+def _process_response_data(data: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Process API response data into a consistent format
+    
+    Args:
+        data: Response data from API (either dict or list)
+        
+    Returns:
+        List of items from the response
+    """
+    if not data:
+        return []
+        
+    # Convert dictionary items to list
+    if isinstance(data, dict):
+        # Check if we have an "items" key (for wrapper-normalized list responses)
+        if "items" in data and isinstance(data["items"], list):
+            return data["items"]
+        
+        # Check for "error" key
+        if "error" in data:
+            return [data]
+            
+        # Check for nested data structures common in GMGN API
+        if "rank" in data and isinstance(data["rank"], list):
+            return data["rank"]
+            
+        if "pairs" in data and isinstance(data["pairs"], list):
+            return data["pairs"]
+            
+        # Try to extract values or convert to list of items
+        items = []
+        for key, value in data.items():
+            if isinstance(value, dict):
+                # Include the key as an ID if it might be useful
+                value_with_id = value.copy()
+                if "id" not in value and key not in value:
+                    value_with_id["id"] = key
+                items.append(value_with_id)
+            else:
+                # For non-dict values, create a simple key-value item
+                items.append({"key": key, "value": value})
+        return items
+    
+    # Data is already a list
+    return data
+
+# === TOOLS ===
+@tool
+def get_trending_wallets(args: str) -> List[Dict[str, Any]]:
+    """🔍 Get top-performing wallets based on profitability for a specific timeframe.
+    
+    Args:
+        args: "timeframe wallet_tag limit" - space separated arguments:
+            - timeframe: Time period to analyze wallets (1d, 7d, 30d)
+            - wallet_tag: Type of wallets (smart_degen, pump_smart, reowned, snipe_bot)
+            - limit: Maximum number of wallets to return
+        
+    Returns:
+        List of top wallets with performance metrics
+    """
+    # Parse arguments
+    expected_args = ["timeframe", "wallet_tag", "limit"]
+    defaults = {"timeframe": "7d", "wallet_tag": "smart_degen", "limit": 10}
+    parsed_args = _parse_args(args, expected_args, defaults)
+    
+    timeframe = parsed_args["timeframe"]
+    wallet_tag = parsed_args["wallet_tag"]
+    limit = parsed_args["limit"]
+    
+    valid_timeframes = ["1d", "7d", "30d"]
+    if timeframe not in valid_timeframes:
+        return [{"error": f"Invalid timeframe. Choose from: {', '.join(valid_timeframes)}"}]
+        
+    valid_tags = ["smart_degen", "pump_smart", "reowned", "snipe_bot", "all"]
+    if wallet_tag not in valid_tags:
+        return [{"error": f"Invalid wallet tag. Choose from: {', '.join(valid_tags)}"}]
+    
+    # Use cache if available
+    cache_key = f"trending_wallets_{timeframe}_{wallet_tag}_{limit}"
+    cached_data = _cache_get(cache_key)
+    if cached_data:
+        return cached_data
+    
+    # Get data from GMGN API
+    wallets_data = gmgn_client.getTrendingWallets(timeframe=timeframe, walletTag=wallet_tag)
+    
+    if not wallets_data:
+        return [{"error": "Failed to fetch trending wallets"}]
+    
+    # Process wallets data
+    wallets_list = _process_response_data(wallets_data)
+    
+    result: List[Dict[str, Any]] = []
+    for wallet in wallets_list[:limit]:
+        if not isinstance(wallet, dict):
+            continue
+            
+        # Try both wallet_address and address fields
+        wallet_address = wallet.get("wallet_address") or wallet.get("address") or "Unknown"
+        
+        # Extract profit metrics from different possible structures
+        pnl_key = f"pnl_{timeframe}"
+        profit_usd = 0
+        profit_sol = 0
+        
+        # Try different field structures
+        if "pnl" in wallet and isinstance(wallet["pnl"], dict):
+            profit_usd = wallet["pnl"].get("usd", 0)
+            profit_sol = wallet["pnl"].get("sol", 0)
+        elif pnl_key in wallet:
+            profit_usd = wallet[pnl_key]
+        elif "realized_profit" in wallet:
+            profit_usd = wallet["realized_profit"]
+        
+        # Extract win rate and trade stats
+        win_rate = wallet.get("winRate", 0) or wallet.get("winrate_7d", 0) or 0
+        trade_count = wallet.get("tradeCount", 0) or wallet.get("txs_30d", 0) or 0
+        
+        # Get tag information
+        tags = wallet.get("tags", [])
+        if not tags and wallet.get("tag") and isinstance(wallet.get("tag"), str):
+            tags = [wallet.get("tag")]
+        
+        # Advanced metrics available in the API
+        buys = wallet.get("buy", 0) or wallet.get("buy_30d", 0) or 0
+        sells = wallet.get("sell", 0) or wallet.get("sell_30d", 0) or 0
+        last_active = wallet.get("last_active", 0)
+        balance = wallet.get("balance", 0) or wallet.get("sol_balance", 0) or 0
+        
+        result.append({
+            "address": wallet_address,
+            "profit_usd": profit_usd,
+            "profit_sol": profit_sol,
+            "profit_percent": wallet.get("profitPercent", 0),
+            "win_rate": win_rate,
+            "trade_count": trade_count,
+            "tags": tags,
+            "buys": buys,
+            "sells": sells,
+            "last_active": last_active,
+            "balance": balance
+        })
+    
+    # Cache results
+    _cache_set(cache_key, result)
+    return result
+
+@tool
+def get_new_token_pairs(args: str) -> List[Dict[str, Any]]:
+    """🔎 Discover newly created token pairs on DEXes with filtering options.
+    
+    Args:
+        args: "limit min_liquidity" - space separated arguments:
+            - limit: Maximum number of new pairs to return
+            - min_liquidity: Minimum liquidity in USD
+        
+    Returns:
+        List of new token pairs with metadata
+    """
+    # Parse arguments
+    expected_args = ["limit", "min_liquidity"]
+    defaults = {"limit": 10, "min_liquidity": 0}  # Default to no minimum
+    parsed_args = _parse_args(args, expected_args, defaults)
+    
+    limit = parsed_args["limit"]
+    min_liquidity = parsed_args["min_liquidity"]
+    
+    cache_key = f"new_pairs_{limit}_{min_liquidity}"
+    cached_data = _cache_get(cache_key)
+    if cached_data:
+        return cached_data
+    
+    # Get new pairs from GMGN API - request more pairs than needed to account for filtering
+    requested_limit = max(limit * 2, 20)  # Request at least 20 pairs or double the needed amount
+    pairs_data = gmgn_client.getNewPairs(limit=requested_limit)
+    
+    if not pairs_data:
+        return [{"error": "Failed to fetch new token pairs"}]
+    
+    # Process pairs data
+    pairs_list = _process_response_data(pairs_data)
+    
+    result: List[Dict[str, Any]] = []
+    for pair in pairs_list:
+        if not isinstance(pair, dict):
+            continue
+            
+        # Extract token data from various formats
+        # Format 1: Token info in a 'token' object
+        token = pair.get("token", {})
+        
+        # Format 2: Token info in a 'base_token_info' object
+        if not token and "base_token_info" in pair:
+            token = pair.get("base_token_info", {})
+        
+        # Get token name and symbol
+        token_name = token.get("name") or pair.get("name", "Unknown")
+        token_symbol = token.get("symbol") or pair.get("symbol", "???")
+            
+        # Extract liquidity from different possible fields
+        liquidity = 0
+        
+        # Check token liquidity field first
+        if "liquidity" in token:
+            if isinstance(token["liquidity"], dict):
+                liquidity = token["liquidity"].get("usd", 0)
+            elif isinstance(token["liquidity"], (int, float, str)):
+                try:
+                    liquidity = float(token["liquidity"])
+                except (ValueError, TypeError):
+                    liquidity = 0
+        
+        # Check pair liquidity fields if token liquidity is zero
+        if liquidity == 0:
+            # Try different liquidity fields in the pair object
+            for liq_field in ["liquidity", "initial_liquidity", "quote_reserve_usd"]:
+                if liq_field in pair:
+                    try:
+                        if isinstance(pair[liq_field], dict):
+                            liquidity = pair[liq_field].get("usd", 0)
+                        else:
+                            liquidity = float(pair[liq_field]) if pair[liq_field] else 0
+                        if liquidity > 0:
+                            break
+                    except (ValueError, TypeError):
+                        continue
+        
+        # Extract DEX info
+        dex = pair.get("dexName") or pair.get("pool_type_str") or pair.get("launchpad", "unknown").lower()
+        
+        # Get token address from different possible fields
+        token_address = (token.get("address") or 
+                        pair.get("base_address") or 
+                        pair.get("token_address", ""))
+        
+        # Creation timestamp data
+        created_at = pair.get("openTimestamp") or pair.get("pool_creation_timestamp") or pair.get("creation_timestamp", "")
+        
+        # Only include pairs that meet the minimum liquidity requirement
+        if liquidity >= min_liquidity:
+            result.append({
+                "token_name": token_name,
+                "token_symbol": token_symbol,
+                "token_address": token_address,
+                "liquidity_usd": float(liquidity) if isinstance(liquidity, (int, float)) else 0,
+                "pool_address": pair.get("address", ""),
+                "created_at": created_at,
+                "dex": dex,
+                "quote_symbol": pair.get("quote_symbol", "SOL")
+            })
+    
+    # Filter by limit and cache results
+    filtered_result = result[:limit]
+    _cache_set(cache_key, filtered_result)
+    return filtered_result
+
+@tool
+def get_trending_tokens(args: str) -> List[Dict[str, Any]]:
+    """📈 Get trending tokens by trading volume and activity.
+    
+    Args:
+        args: "timeframe limit" - space separated arguments:
+            - timeframe: Time period to analyze (1h, 6h, 24h)
+            - limit: Maximum number of tokens to return
+        
+    Returns:
+        List of trending tokens with market data
+    """
+    # Parse arguments
+    expected_args = ["timeframe", "limit"]
+    defaults = {"timeframe": "1h", "limit": 10}
+    parsed_args = _parse_args(args, expected_args, defaults)
+    
+    timeframe = parsed_args["timeframe"]
+    limit = parsed_args["limit"]
+    
+    valid_timeframes = ["1h", "6h", "24h"]
+    if timeframe not in valid_timeframes:
+        return [{"error": f"Invalid timeframe. Choose from: {', '.join(valid_timeframes)}"}]
+    
+    # Use cache if available
+    cache_key = f"trending_tokens_{timeframe}_{limit}"
+    cached_data = _cache_get(cache_key)
+    if cached_data:
+        return cached_data
+    
+    # Get data from GMGN API
+    tokens_data = gmgn_client.getTrendingTokens(timeframe=timeframe)
+    
+    if not tokens_data:
+        return [{"error": "Failed to fetch trending tokens"}]
+    
+    # Process tokens data
+    tokens_list = _process_response_data(tokens_data)
+    
+    result: List[Dict[str, Any]] = []
+    for token in tokens_list[:limit]:
+        if not isinstance(token, dict):
+            continue
+            
+        # Extract price data
+        price_usd = token.get("price", 0)
+        
+        # Handle price change data
+        price_change_key = f"price_change_percent{timeframe}"
+        price_change = token.get("price_change_percent", 0)
+        if price_change_key in token:
+            price_change = token[price_change_key]
+        
+        # Volume data
+        volume = token.get("volume", 0)
+        
+        # Liquidity data
+        liquidity = token.get("liquidity", 0)
+        
+        # Market cap data
+        market_cap = token.get("market_cap", 0) or token.get("marketCap", 0) or token.get("fdv", 0)
+        
+        # Social data
+        twitter = token.get("twitter_username", "")
+        website = token.get("website", "")
+        
+        result.append({
+            "name": token.get("name", "Unknown"),
+            "symbol": token.get("symbol", "???"),
+            "address": token.get("address", ""),
+            "price_usd": price_usd,
+            "price_change_percent": price_change,
+            "volume": volume,
+            "liquidity": liquidity,
+            "market_cap": market_cap,
+            "swaps": token.get("swaps", 0),
+            "holder_count": token.get("holder_count", 0),
+            "creation_date": token.get("pool_creation_timestamp", 0) or token.get("open_timestamp", 0),
+            "twitter": twitter,
+            "website": website
+        })
+    
+    # Cache results
+    _cache_set(cache_key, result)
+    return result

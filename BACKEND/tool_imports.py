@@ -1,184 +1,108 @@
+# ⚠️ Diese Datei sammelt alle @tool-Funktionen aus unseren spezialisierten Modulen.
+# Sie dient als zentrale Registry für die Agent-Tools, die per LangChain benutzt werden.
+# Halte sie aktuell, wenn du neue Tools baust – oder nutze Autodiscovery (in Zukunft).
+
 from reddit_tools import get_reddit_data, count_mentions, analyze_sentiment, find_trending_cryptos
-from cryptocompare_tools import (
-    get_cryptocompare_current_price, get_top_volume_symbols,
-    get_latest_social_stats, get_historical_social_stats, list_news_feeds_and_categories,
-    get_latest_trading_signals as get_crypto_compare_latest_trading_signals, get_top_exchanges_by_volume, get_historical_daily
-)
-from coingecko_tools import (
-    get_market_data, get_historical_market_data, get_ohlc,
-    get_trending_cryptos, calculate_macd, get_exchange_rates, calculate_rsi
-)
 from youtube_tools import search_youtube, process_youtube_video, query_youtube_video
-from coinpaprika_tools import get_coin_details, get_coin_tags, get_market_overview, get_ticker_info
 from cryptopanic_tools import get_latest_news, get_news_sources, get_last_news_title
-from coinmarketcap_tools import get_latest_listings, get_crypto_metadata, get_global_metrics
 from fearandgreed_tools import get_fear_and_greed_index
-from binance_tools import get_binance_ticker, get_binance_order_book, get_binance_recent_trades
-from bitquery_tools import fetch_latest_pancakeswap_tokens, fetch_top_10_pumpfun_tokens, fetch_latest_solana_tokens, compare_bsc_token_transfers, fetch_bitfinex_bitcoin_transactions, get_latest_uniswap_pairs, get_multichain_portfolio
+from gmgn_tools import get_trending_wallets, get_new_token_pairs, get_trending_tokens
+from dexscreener_tools import (
+    get_dex_liquidity_distribution,
+    analyze_token_market_microstructure,
+    get_chain_dex_volume_leaders,
+    get_cross_chain_token_data,
+    search_dexes_for_token
+)
 
-# Moralis Tool Imports aktualisiert - Solana-fokussiert (nur Wallet-Tools)
+# CoinGecko Tools (neue Version)
+from coingecko_tools import (
+    get_current_price, get_market_chart, get_ohlc_data, get_coin_info,
+    list_trending_coins, list_trending_coins
+)
+
+# Moralis Wallet & Token Tools (Solana)
 from moralis_wallet_tools import (
-    analyze_wallet
+    get_sol_balance, get_spl_tokens, get_portfolio_value,
+    get_wallet_nfts, get_recent_swaps, get_wallet_risk_score, get_wallet_overview
 )
-
-# Moralis Token Tools - Neue Imports
 from moralis_token_tools import (
-    analyze_memecoin
+    get_token_metadata, get_token_price, get_token_holder_count,
+    get_token_dex_data, get_token_marketcap, get_token_risk_score, analyze_token,
+    search_token, resolve_token_address
 )
 
-# GMGN Whale Tracker Tool
-from gmgn_tools import whale_watch_report, multi_timeframe_trending_analysis
 
-from dune_analytics_tools import (
-    get_dex_volume_rankings,
-    get_ethereum_daily_activity,
-    get_nft_market_activity_metrics,
-    get_crypto_sector_performance_analysis,
-    get_bitcoin_etf_analysis,
-    get_ethereum_staking_analysis,
-    get_bitcoin_top_holders_analysis,
-    get_polygon_gaming_metrics,
-    get_tokenization_market_analysis,
-    get_tokenization_project_metrics,
-    get_memecoin_trading_activity,
-    get_ai_related_tokens_analysis,
-    get_stablecoin_market_analysis,
-    get_farcaster_token_trends,
-    get_nft_collection_rankings,
-    get_bitcoin_yearly_returns,
-    get_opensea_daily_active_users,
-    get_opensea_monthly_active_users,
-    get_opensea_daily_volume_usd,
-    get_opensea_monthly_volume_usd,
-    get_opensea_monthly_nfts_sold,
-    get_nft_wash_trading_analysis,
-    get_solana_dex_volume_analysis,
-    get_sunpump_recent_buys,
-    get_daily_fees_comparison,
-    get_top_solana_memecoins,
-    get_memecoin_project_rankings,
-    get_bitcoin_activity_metrics,
-    get_trading_bot_leaderboard,
-    get_tether_tron_daily_volume,
-    get_base_token_pair_metrics,
-    get_virtuals_launch_metrics,
-    get_token_holder_distribution
-)
 
 
 
 def import_tools():
     """
-    Collects and returns a list of functions for various external data retrieval and processing tasks.
-    Each tool function is designed to be compatible with LangChain's convert_to_openai_function, which expects
-    callable objects.
+    🔧 Central registry for all tool functions used across the system.
+
+    These tools provide access to external data sources like CoinGecko, Moralis, Reddit, YouTube, etc.
+    All functions are designed to be compatible with LangChain's convert_to_openai_function interface.
     """
     tools = [
-        # CryptoCompare Tools
-        get_cryptocompare_current_price,  # Retrieves the current price of a specified cryptocurrency.
-        get_top_volume_symbols,  # Retrieves the top cryptocurrencies by trading volume.
-        get_latest_social_stats,  # Retrieves the latest social media statistics for a specified cryptocurrency.
-        get_historical_social_stats,  # Retrieves historical social media statistics for a specified cryptocurrency.
-        list_news_feeds_and_categories,  # Lists available news feeds and their categories from CryptoCompare.
-        get_crypto_compare_latest_trading_signals,  # Retrieves the latest trading signals from CryptoCompare.
-        get_top_exchanges_by_volume,  # Retrieves the top cryptocurrency exchanges by trading volume.
-        get_historical_daily,  # Retrieves the daily historical data for a specific cryptocurrency in a given currency.
 
-        # CoinGecko Tools
-        get_market_data,  # Retrieves current market data for a specified cryptocurrency.
-        get_historical_market_data,  # Retrieves historical market data for a specified cryptocurrency.
-        get_ohlc,  # Retrieves OHLC (Open, High, Low, Close) data for a specified cryptocurrency.
-        get_trending_cryptos,  # Retrieves the list of trending cryptocurrencies.
-        calculate_macd,  # Calculates the MACD (Moving Average Convergence Divergence) for a specified cryptocurrency.
-        get_exchange_rates,  # Retrieves current exchange rates for a specified cryptocurrency.
-        calculate_rsi,  # Calculates the RSI (Relative Strength Index) for a specified cryptocurrency.
+        # === CoinGecko Tools (neue Struktur) ===
+        get_current_price,        # Aktueller Preis eines Tokens
+        get_market_chart,      # Preis, Volumen und MarketCap über Zeit
+        get_ohlc_data,         # OHLC-Daten (candlestick-style)
+        get_coin_info,         # Coin-Beschreibung & Metadaten
+        list_trending_coins,  # Trending Coins von CoinGecko
+        list_trending_coins,   # Liste mit detaillierten Trendinfos
 
-        # Reddit Tools
-        get_reddit_data,  # Retrieves data from Reddit for a specified cryptocurrency.
-        count_mentions,  # Counts the number of mentions of a specified cryptocurrency on Reddit.
-        analyze_sentiment,  # Analyzes sentiment of Reddit posts for a specified cryptocurrency.
-        find_trending_cryptos,  # Finds trending cryptocurrencies and new coins being discussed on Reddit.
+        # === Reddit Tools ===
+        get_reddit_data,       # Gesamtdaten aus Reddit
+        count_mentions,        # Erwähnungen eines Coins zählen
+        analyze_sentiment,     # Sentiment zu einem Coin analysieren
+        find_trending_cryptos, # Neue/trendende Coins auf Reddit finden
 
-        # YouTube Tools
-        search_youtube,  # Searches YouTube for videos related to a specified cryptocurrency.
-        process_youtube_video,  # Processes a YouTube video to extract relevant data.
-        query_youtube_video,  # Queries detailed information about a specific YouTube video.
-        
-        # CoinPaprika Tools
-        get_coin_details,  # Retrieves detailed information about a specified cryptocurrency.
-        get_coin_tags,  # Retrieves tags associated with a specified cryptocurrency.
-        get_market_overview,  # Retrieves an overview of the cryptocurrency market.
-        get_ticker_info,  # Retrieves ticker information for a specified cryptocurrency.
+        # === YouTube Tools ===
+        search_youtube,        # YouTube-Suche zu einem Coin
+        process_youtube_video, # Transkription & Analyse eines Videos
+        query_youtube_video,   # Metadaten & Analyse zu einem Video
 
-        # CryptoPanic Tools
-        get_latest_news,  # Retrieves the latest news from CryptoPanic.
-        get_news_sources,  # Retrieves a list of news sources from CryptoPanic.
-        get_last_news_title,  # Retrieves the title of the most recent news article from CryptoPanic.
+        # === CryptoPanic News Tools ===
+        get_latest_news,       # Neueste News (inkl. Sentiment)
+        get_news_sources,      # Liste von Newsquellen
+        get_last_news_title,   # Nur Headline der letzten News
 
-        # CoinMarketCap Tools
-        get_latest_listings,  # Retrieves the latest listings of cryptocurrencies from CoinMarketCap.
-        get_crypto_metadata,  # Retrieves metadata for a specified cryptocurrency.
-        get_global_metrics,  # Retrieves global metrics for the cryptocurrency market.
+        # === Fear and Greed Index ===
+        get_fear_and_greed_index,  # Aktueller Marktstimmungsindex
 
-        # Fear and Greed Index Tools
-        get_fear_and_greed_index,  # Retrieves the Fear and Greed Index for the cryptocurrency market.
+        # === Moralis: Solana Wallet Tools ===
+        get_sol_balance,       # SOL-Balance einer Wallet
+        get_spl_tokens,        # Liste aller SPL-Tokens
+        get_portfolio_value,   # Gesamtwert (USD)
+        get_wallet_nfts,       # NFTs der Wallet
+        get_recent_swaps,      # Letzte Swap-Transaktionen
+        get_wallet_risk_score, # Wallet-Risiko-Bewertung
+        get_wallet_overview,   # Komplettanalyse
 
-        # Moralis Solana Wallet Tools
-        analyze_wallet,
+        # === Moralis: Token Tools ===
+        get_token_metadata,    # Token-Metadaten (Name, Supply etc.)
+        get_token_price,       # Preis eines Tokens
+        get_token_holder_count,# Anzahl Holder
+        get_token_dex_data,    # Volumen & Liquidität (DexScreener)
+        get_token_marketcap,   # Market Cap (Preis × Supply)
+        get_token_risk_score,  # Bewertung Risikoindikatoren
+        analyze_token,         # Vollanalyse
+        search_token,          # Verbesserte Token-Suche (Name/Symbol/Adresse)
+        resolve_token_address, # Token-Symbol/Name zu Adresse auflösen
 
-        # Moralis Token Tools - Neue Tools
-        analyze_memecoin,
-        
-        # GMGN Tools - Smart Money Tracking
-        whale_watch_report,  # Erstellt einen detaillierten Bericht über aktuelle Whale-Aktivitäten auf Solana
+        # === GMGN: Smart Money & Whale Tracking ===
+        get_trending_wallets,  # Top-performing Wallets tracken
+        get_new_token_pairs,   # Neue Token-Pairings finden
+        get_trending_tokens,   # Trending Tokens finden
 
-        # Dune Analytics Tools
-        get_dex_volume_rankings,  # Retrieves and ranks DEX projects by trading volume.
-        get_ethereum_daily_activity,  # Retrieves daily active users and receiving addresses on Ethereum.
-        get_nft_market_activity_metrics,  # Retrieves metrics on NFT market activity.
-        get_crypto_sector_performance_analysis,  # Analyzes performance of different crypto sectors.
-        get_bitcoin_etf_analysis,  # Analyzes Bitcoin ETF trends and data.
-        get_ethereum_staking_analysis,  # Analyzes Ethereum staking data and trends.
-        get_bitcoin_top_holders_analysis,  # Analyzes top holders of Bitcoin.
-        get_polygon_gaming_metrics,  # Retrieves metrics on gaming activities on Polygon.
-        get_tokenization_market_analysis,  # Analyzes market trends in tokenization.
-        get_tokenization_project_metrics,  # Provides metrics on tokenization projects.
-        get_memecoin_trading_activity,  # Analyzes trading activity of meme coins.
-        get_ai_related_tokens_analysis,  # Analyzes trends in emerging AI tokens.
-        get_stablecoin_market_analysis,  # Analyzes trends in the stablecoin market.
-        get_farcaster_token_trends,  # Retrieves trends in Farcaster token data.
-        get_nft_collection_rankings,  # Ranks NFT collections based on certain criteria.
-        get_bitcoin_yearly_returns,
-        get_opensea_daily_active_users,
-        get_opensea_monthly_active_users,
-        get_opensea_daily_volume_usd,
-        get_opensea_monthly_volume_usd,
-        get_opensea_monthly_nfts_sold,
-        get_nft_wash_trading_analysis,
-        get_solana_dex_volume_analysis,
-        get_sunpump_recent_buys,
-        get_daily_fees_comparison,
-        get_top_solana_memecoins,
-        get_memecoin_project_rankings,
-        get_bitcoin_activity_metrics,
-        get_tether_tron_daily_volume,
-        get_trading_bot_leaderboard,
-        get_base_token_pair_metrics,
-        get_virtuals_launch_metrics,
-        get_token_holder_distribution,
-        
-        # Binance Tools
-        get_binance_ticker,  # Retrieves the current ticker price from Binance.
-        get_binance_order_book,  # Retrieves the order book for a specified cryptocurrency on Binance.
-        get_binance_recent_trades,  # Retrieves recent trades for a specified cryptocurrency on Binance.
-        
-        # Bitquery Tools
-        fetch_latest_pancakeswap_tokens, 
-        fetch_top_10_pumpfun_tokens, 
-        fetch_latest_solana_tokens, 
-        compare_bsc_token_transfers, 
-        fetch_bitfinex_bitcoin_transactions, 
-        get_latest_uniswap_pairs,
-        get_multichain_portfolio,
+        # === DexScreener Tools ===
+        get_dex_liquidity_distribution,
+        analyze_token_market_microstructure,
+        get_chain_dex_volume_leaders,
+        get_cross_chain_token_data,
+        search_dexes_for_token,
     ]
+
     return tools

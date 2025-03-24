@@ -11,8 +11,7 @@ from dotenv import load_dotenv
 from lenox import Lenox  
 from prompts import PromptEngine, PromptEngineConfig
 from tool_imports import import_tools
-import whisper
-from gpt_research_tools import GPTResearchManager
+from perplexity_research import PerplexityManager
 import os
 import traceback
 import sys
@@ -23,7 +22,6 @@ import sys
 load_dotenv()
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/images'
-whisper_model = whisper.load_model("tiny")
 openai_api_key = os.getenv('OPENAI_API_KEY')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'my_secret_key')
@@ -47,8 +45,8 @@ tools_dict = {tool.name: tool for tool in tools}
 prompt_engine_config = PromptEngineConfig(context_length=10, max_tokens=4096)
 prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools_dict)  # Pass tools_dict here
 
-# Initialize GPTResearchManager
-gpt_research_manager = GPTResearchManager()
+# Initialize PerplexityManager instead of GPTResearchManager
+gpt_research_manager = PerplexityManager()
 
 
 # Initialize Lenox with all necessary components
@@ -76,12 +74,18 @@ def gpt_research():
     query = data.get('query', '')
     report_type = data.get('report_type', 'research_report')
     report_source = data.get('report_source', 'web')
+    source_urls = data.get('source_urls', None)
     
     if not query:
         return jsonify({'error': 'Empty query.'}), 400
 
-    # Corrected call to handle_gpt_research
-    result = lenox.intent_detector.handle_gpt_research(user_query=query, report_type=report_type, report_source=report_source)
+    # Verbesserte GPT-Research Ausführung mit allen Parametern
+    result = gpt_research_manager.run_gpt_research(
+        query=query, 
+        report_type=report_type, 
+        report_source=report_source,
+        source_urls=source_urls
+    )
     return jsonify(result)
 
 
@@ -91,7 +95,8 @@ def gpt_research():
 def handle_query():
     try:
         data = request.get_json()
-        original_query = data.get('query', '')  # Keep original case
+        app.logger.debug(f"🔍 Incoming payload: {data}")
+        original_query = data.get('query') or data.get('message', '')
 
         if not original_query:
             app.logger.debug("No query provided in the request.")
@@ -136,4 +141,3 @@ if __name__ == '__main__':
         app.logger.critical(f"Failed to start server: {str(e)}")
         app.logger.critical(traceback.format_exc())
         sys.exit(1)
-

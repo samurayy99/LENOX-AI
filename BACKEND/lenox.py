@@ -11,7 +11,7 @@ from langchain.schema.runnable import RunnablePassthrough
 from langchain.agents import AgentExecutor
 from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
 from langchain.agents.format_scratchpad import format_to_openai_functions
-from gpt_research_tools import GPTResearchManager
+from perplexity_research import PerplexityManager
 from intent_detection import IntentDetector, IntentType
 from prompts import system_prompt_content, PromptEngine, PromptEngineConfig
 import tiktoken
@@ -55,7 +55,7 @@ class Lenox:
         
         # GPT Research & Intent Detection
         self.db_path = 'lenox.db'
-        self.gpt_research_manager = GPTResearchManager()
+        self.gpt_research_manager = PerplexityManager()
         self.intent_detector = IntentDetector(self.prompt_engine, self.gpt_research_manager)
         
         # Setup components for agent
