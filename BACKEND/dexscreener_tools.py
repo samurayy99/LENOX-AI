@@ -2,7 +2,8 @@
 import time
 import logging
 import requests
-from typing import Dict, List, Any, Optional, Union, cast
+import json
+from typing import Dict, List, Any, Optional, Union
 from dotenv import load_dotenv
 from langchain.tools import tool
 
@@ -171,6 +172,79 @@ def _get_volume_liquidity_ratio(pair: Dict[str, Any]) -> float:
     
     return volume / liquidity
 
+def _clean_token_address(address: str) -> str:
+    """Clean token address by removing $ prefix and trimming"""
+    address = address.strip()
+    if address.startswith('$'):
+        address = address[1:]
+    return address
+
+def _find_token_by_search(query: str) -> Dict[str, Any]:
+    """Use search API to find token by name, symbol, or partial address"""
+    # Strip spaces first to handle whitespace properly
+    clean_query = query.strip()
+    
+    # Remove any '$' prefix from token symbols
+    if clean_query.startswith('$'):
+        clean_query = clean_query[1:]
+    
+    if not clean_query:
+        clean_query = "token"  # Default to generic token search
+    
+    logger.info(f"Searching for token using '{clean_query}' as search term")
+    
+    # Use a generic approach without hardcoding specific tokens
+    # Try multiple search patterns to increase chances of finding the correct token
+    search_terms = [
+        clean_query,                    # Direct search
+        f"{clean_query} token",         # Add "token" suffix
+        clean_query.replace(" ", "")    # No spaces version
+    ]
+    
+    all_pairs = []
+    for term in search_terms:
+        search_data = _make_request(f"{BASE_URL}/search", {"q": term})
+        
+        if "error" in search_data:
+            continue
+        
+        pairs = _extract_pairs_data(search_data)
+        if pairs:
+            all_pairs.extend(pairs)
+    
+    if not all_pairs:
+        return {"error": f"No token found for query: {query}"}
+    
+    # Find exact symbol matches first
+    exact_matches = []
+    for pair in all_pairs:
+        base_token = pair.get("baseToken", {})
+        symbol = base_token.get("symbol", "").lower()
+        name = base_token.get("name", "").lower() 
+        
+        # Try to match against symbol or name (exact match, case insensitive)
+        query_lower = clean_query.lower()
+        if query_lower == symbol.lower() or query_lower == name.lower():
+            exact_matches.append(pair)
+    
+    # If we have exact matches, use those. Otherwise use all pairs.
+    pairs_to_use = exact_matches if exact_matches else all_pairs
+    
+    # Sort by liquidity for most reliable result
+    pairs_to_use.sort(key=lambda p: p.get("liquidity", {}).get("usd", 0), reverse=True)
+    selected_pair = pairs_to_use[0]
+    base_token = selected_pair.get("baseToken", {})
+    
+    match_type = "exact match" if exact_matches else "related match"
+    logger.info(f"Found {match_type} for {clean_query}: {base_token.get('name', 'Unknown')} ({base_token.get('symbol', 'Unknown')})")
+    
+    return {
+        "pairs": [selected_pair],
+        "token_address": base_token.get("address", ""),
+        "token_name": base_token.get("name", ""),
+        "token_symbol": base_token.get("symbol", "")
+    }
+
 # === TOOLS ===
 @tool
 def get_dex_liquidity_distribution(token_address: str) -> List[Dict[str, Any]]:
@@ -182,6 +256,16 @@ def get_dex_liquidity_distribution(token_address: str) -> List[Dict[str, Any]]:
     Returns:
         List of DEX liquidity pools with details on distribution
     """
+    # Clean and normalize the token address
+    token_address = _clean_token_address(token_address)
+    
+    # Try to find the token by search if it isn't a standard address format
+    if not (token_address.startswith("0x") or len(token_address) >= 32):
+        search_result = _find_token_by_search(token_address)
+        if "error" in search_result:
+            return [{"error": search_result["error"]}]
+        token_address = search_result.get("token_address", token_address)
+    
     cache_key = f"dex_liquidity_{token_address}"
     cached_data = _cache_get(cache_key)
     if cached_data:
@@ -195,7 +279,16 @@ def get_dex_liquidity_distribution(token_address: str) -> List[Dict[str, Any]]:
     
     pairs = _extract_pairs_data(data)
     if not pairs:
-        return [{"error": f"No liquidity pools found for token {token_address}"}]
+        # Try a different approach - search by token name/symbol
+        search_result = _find_token_by_search(token_address)
+        if "error" in search_result:
+            return [{"error": f"No liquidity pools found for token {token_address}"}]
+        
+        # Extract pairs directly from search result
+        if "pairs" in search_result and search_result["pairs"]:
+            pairs = search_result["pairs"]
+        else:
+            return [{"error": f"No liquidity pools found for token {token_address}"}]
     
     # Group and analyze by DEX
     dex_data = {}
@@ -247,6 +340,16 @@ def analyze_token_market_microstructure(token_address: str) -> Dict[str, Any]:
     Returns:
         Detailed analysis of trading patterns and market structure
     """
+    # Clean and normalize the token address
+    token_address = _clean_token_address(token_address)
+    
+    # Try to find the token by search if it isn't a standard address format
+    if not (token_address.startswith("0x") or len(token_address) >= 32):
+        search_result = _find_token_by_search(token_address)
+        if "error" in search_result:
+            return {"error": search_result["error"]}
+        token_address = search_result.get("token_address", token_address)
+    
     cache_key = f"microstructure_{token_address}"
     cached_data = _cache_get(cache_key)
     if cached_data:
@@ -260,7 +363,16 @@ def analyze_token_market_microstructure(token_address: str) -> Dict[str, Any]:
     
     pairs = _extract_pairs_data(data)
     if not pairs:
-        return {"error": f"No trading pairs found for token {token_address}"}
+        # Try a different approach - search by token name/symbol
+        search_result = _find_token_by_search(token_address)
+        if "error" in search_result:
+            return {"error": f"No trading pairs found for token {token_address}"}
+        
+        # Extract pairs directly from search result
+        if "pairs" in search_result and search_result["pairs"]:
+            pairs = search_result["pairs"]
+        else:
+            return {"error": f"No trading pairs found for token {token_address}"}
     
     # Find the primary trading pair (highest liquidity)
     primary_pair = max(pairs, key=lambda p: p.get("liquidity", {}).get("usd", 0))
@@ -346,227 +458,462 @@ def analyze_token_market_microstructure(token_address: str) -> Dict[str, Any]:
     _cache_set(cache_key, result)
     return result
 
-@tool
-def get_chain_dex_volume_leaders(args: str) -> List[Dict[str, Any]]:
-    """📈 Get most active DEXes on a specific chain ranked by trading volume.
+def get_trending_pairs(chain_id: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+    """📈 Get the most trending pairs on DEXes right now.
     
     Args:
-        args: "chain_id limit min_liquidity" - space separated arguments:
-            - chain_id: Chain to analyze (e.g., solana, ethereum, bsc)
-            - limit: Maximum number of DEXes to return
-            - min_liquidity: Minimum liquidity in USD
+        chain_id: Optional chain ID to filter pairs (e.g., "solana", "ethereum", "bsc")
+        limit: Maximum number of pairs to return (default: 10, max: 100)
         
     Returns:
-        List of DEXes with highest trading volume on the chain
+        List of trending pairs with market data
     """
-    expected_args = ["chain_id", "limit", "min_liquidity"]
-    defaults = {"chain_id": "solana", "limit": 5, "min_liquidity": 10000}
-    parsed_args = cast(Dict[str, Any], _parse_args(args, expected_args, defaults))
+    # Validate limit
+    limit = max(1, min(100, limit))
     
-    chain_id = _normalize_chain_id(parsed_args["chain_id"])
-    limit = int(parsed_args["limit"])
-    min_liquidity = float(parsed_args["min_liquidity"])
+    # Normalize chain ID
+    if chain_id:
+        chain_id = _normalize_chain_id(chain_id)
     
-    cache_key = f"dex_volume_{chain_id}_{limit}_{min_liquidity}"
+    # Build cache key
+    cache_key = f"trending_pairs_{chain_id}_{limit}" if chain_id else f"trending_pairs_{limit}"
     cached_data = _cache_get(cache_key)
     if cached_data:
         return cached_data
     
-    # Search for high volume pairs on the chain
-    url = f"{BASE_URL}/search"
-    params = {"q": chain_id}
-    data = _make_request(url, params, cache_key=f"search_{chain_id}")
+    # Use the most effective search strategies that don't hardcode specific coin names
+    # 1. Use common DEX quote currencies to find active pairs
+    # 2. Use generic category terms for crypto assets
+    search_strategies = [
+        # Quote currencies and base currencies
+        "usdc", "usdt", "sol", "eth", "btc", "weth",
+        # Generic crypto categories instead of specific coins
+        "meme", "token", "coin", "dao", "ai", "defi"
+    ]
     
-    if "error" in data:
-        return [{"error": data["error"]}]
+    all_pairs = []
+    for term in search_strategies:
+        url = f"{BASE_URL}/search"
+        params = {"q": term}
+        
+        data = _make_request(url, params=params)
+        
+        if "error" not in data:
+            pairs = _extract_pairs_data(data)
+            all_pairs.extend(pairs)
     
-    pairs = _extract_pairs_data(data)
+    if not all_pairs:
+        return [{"error": "No trending pairs found"}]
     
-    # Filter by minimum liquidity
-    pairs = [p for p in pairs if p.get("liquidity", {}).get("usd", 0) >= min_liquidity]
+    # Remove duplicates based on pairAddress
+    unique_pairs = {}
+    for pair in all_pairs:
+        addr = pair.get("pairAddress", "")
+        if addr and addr not in unique_pairs:
+            unique_pairs[addr] = pair
     
-    # Group by DEX and calculate metrics
-    dex_data = {}
+    pairs = list(unique_pairs.values())
+    
+    # Filter by chain if specified
+    if chain_id:
+        pairs = [p for p in pairs if p.get("chainId", "").lower() == chain_id.lower()]
+        if not pairs:
+            return [{"error": f"No trending pairs found for chain: {chain_id}"}]
+    
+    # Calculate trendiness score: prioritize volume-to-liquidity ratio, high transaction count,
+    # and price movement, which are better indicators of trending tokens
     for pair in pairs:
-        dex_id = pair.get("dexId", "unknown")
+        liquidity = pair.get("liquidity", {}).get("usd", 0)
+        volume = pair.get("volume", {}).get("h24", 0)
+        price_change = abs(pair.get("priceChange", {}).get("h24", 0))
+        txns_24h = sum(pair.get("txns", {}).get("h24", {}).get(x, 0) for x in ["buys", "sells"])
         
-        if dex_id not in dex_data:
-            dex_data[dex_id] = {
-                "dex": dex_id,
-                "chain": chain_id,
-                "volume_24h": 0,
-                "liquidity_usd": 0,
-                "pairs_count": 0,
-                "transactions_24h": 0
-            }
+        # Avoid division by zero
+        if liquidity <= 1:
+            vol_liq_ratio = 0
+        else:
+            vol_liq_ratio = volume / liquidity
         
-        dex_entry = dex_data[dex_id]
-        dex_entry["volume_24h"] += pair.get("volume", {}).get("h24", 0)
-        dex_entry["liquidity_usd"] += pair.get("liquidity", {}).get("usd", 0)
-        dex_entry["pairs_count"] += 1
-        
-        # Sum up transactions
-        txns = pair.get("txns", {}).get("h24", {})
-        if txns:
-            dex_entry["transactions_24h"] += txns.get("buys", 0) + txns.get("sells", 0)
+        # Calculate trending score
+        trending_score = (vol_liq_ratio * 100) + (txns_24h * 0.5) + (price_change * 5)
+        pair["trending_score"] = trending_score
     
-    # Convert to list, calculate fees estimate (0.3% is common)
+    # Sort by trending score for truly trending pairs
+    pairs.sort(key=lambda p: p.get("trending_score", 0), reverse=True)
+    
+    # Limit results
+    pairs = pairs[:limit]
+    
+    # Format response
     result = []
-    for dex_id, data in dex_data.items():
-        # Only include DEXes with reasonable volume
-        if data["volume_24h"] > 0:
-            fee_estimate = data["volume_24h"] * 0.003  # 0.3% fee assumption
-            result.append({
-                "dex": dex_id,
-                "chain": chain_id,
-                "volume_24h": data["volume_24h"],
-                "liquidity_usd": data["liquidity_usd"],
-                "pairs_count": data["pairs_count"],
-                "transactions_24h": data["transactions_24h"],
-                "daily_fee_estimate_usd": round(fee_estimate, 2),
-                "volume_to_liquidity_ratio": round(data["volume_24h"] / data["liquidity_usd"], 2) if data["liquidity_usd"] > 0 else 0
-            })
+    for pair in pairs:
+        base_token = pair.get("baseToken", {})
+        quote_token = pair.get("quoteToken", {})
+        
+        result.append({
+            "chain_id": pair.get("chainId", ""),
+            "dex_id": pair.get("dexId", ""),
+            "pair_address": pair.get("pairAddress", ""),
+            "base_token": {
+                "address": base_token.get("address", ""),
+                "name": base_token.get("name", ""),
+                "symbol": base_token.get("symbol", "")
+            },
+            "quote_token": {
+                "address": quote_token.get("address", ""),
+                "name": quote_token.get("name", ""),
+                "symbol": quote_token.get("symbol", "")
+            },
+            "price_usd": pair.get("priceUsd", "0"),
+            "price_native": pair.get("priceNative", "0"),
+            "liquidity_usd": pair.get("liquidity", {}).get("usd", 0),
+            "volume_24h": pair.get("volume", {}).get("h24", 0),
+            "price_change_24h": pair.get("priceChange", {}).get("h24", 0),
+            "created_at": pair.get("pairCreatedAt", 0),
+            "url": pair.get("url", "")
+        })
     
-    # Sort by volume
-    result = sorted(result, key=lambda x: x["volume_24h"], reverse=True)[:limit]
     _cache_set(cache_key, result)
-    
     return result
 
-@tool
-def get_cross_chain_token_data(token_symbol: str) -> List[Dict[str, Any]]:
-    """🔍 Find and compare the same token across different blockchains.
+def get_newest_pairs(chain_id: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+    """🆕 Get the most recently created pairs on DEXes.
     
     Args:
-        token_symbol: The token symbol or name to search for (e.g., "USDC", "ETH")
+        chain_id: Optional chain ID to filter pairs (e.g., "solana", "ethereum", "bsc")
+        limit: Maximum number of pairs to return (default: 10, max: 100)
         
     Returns:
-        List of matching tokens across different chains with price and liquidity data
+        List of newest pairs with market data
     """
-    cache_key = f"cross_chain_{token_symbol.lower()}"
+    # Validate limit
+    limit = max(1, min(100, limit))
+    
+    # Normalize chain ID
+    if chain_id:
+        chain_id = _normalize_chain_id(chain_id)
+    
+    # Build cache key with a short TTL for newest pairs
+    cache_key = f"newest_pairs_{chain_id}_{limit}" if chain_id else f"newest_pairs_{limit}"
     cached_data = _cache_get(cache_key)
     if cached_data:
         return cached_data
     
-    url = f"{BASE_URL}/search"
-    params = {"q": token_symbol}
-    data = _make_request(url, params)
+    # Search strategies that maximize the chance of finding recent pairs
+    # without hardcoding specific token names
+    search_strategies = [
+        # Quote currencies (most new tokens pair with these)
+        "usdc", "usdt", "sol", "eth", "weth",
+        # Generic terms for finding new tokens
+        "token", "coin", "new", "launch", "meme",
+        # Common categories for crypto projects
+        "dao", "finance", "swap", "ai", "game"
+    ]
     
-    if "error" in data:
-        return [{"error": data["error"]}]
-    
-    pairs = _extract_pairs_data(data)
-    if not pairs:
-        return [{"error": f"No tokens found matching '{token_symbol}'"}]
-    
-    # Group by chain and find the best pair for each chain
-    chain_data = {}
-    for pair in pairs:
-        chain_id = pair.get("chainId", "unknown")
-        token_address = pair.get("baseToken", {}).get("address", "")
-        token_symbol_match = pair.get("baseToken", {}).get("symbol", "").lower()
+    all_pairs = []
+    for term in search_strategies:
+        url = f"{BASE_URL}/search"
+        params = {"q": term}
         
-        # Skip pairs that don't match the token symbol
-        if token_symbol.lower() not in token_symbol_match.lower():
-            continue
-            
-        # Get or create chain entry
-        if chain_id not in chain_data:
-            chain_data[chain_id] = {
-                "chain_id": chain_id,
-                "pairs": []
-            }
-            
-        # Add to the chain's pairs
-        chain_data[chain_id]["pairs"].append({
-            "dex": pair.get("dexId", "unknown"),
-            "token_address": token_address,
-            "token_name": pair.get("baseToken", {}).get("name", "Unknown"),
-            "token_symbol": pair.get("baseToken", {}).get("symbol", "UNKNOWN"),
+        data = _make_request(url, params=params)
+        
+        if "error" not in data:
+            pairs = _extract_pairs_data(data)
+            all_pairs.extend(pairs)
+    
+    if not all_pairs:
+        return [{"error": "No pairs found"}]
+    
+    # Remove duplicates based on pairAddress
+    unique_pairs = {}
+    for pair in all_pairs:
+        addr = pair.get("pairAddress", "")
+        if addr and addr not in unique_pairs:
+            unique_pairs[addr] = pair
+    
+    pairs = list(unique_pairs.values())
+    
+    # Filter by chain if specified
+    if chain_id:
+        pairs = [p for p in pairs if p.get("chainId", "").lower() == chain_id.lower()]
+        if not pairs:
+            return [{"error": f"No pairs found for chain: {chain_id}"}]
+    
+    # Filter to only include pairs with creation timestamp
+    pairs = [p for p in pairs if p.get("pairCreatedAt", 0) > 0]
+    
+    # Sort by creation time (newest first)
+    pairs.sort(key=lambda p: p.get("pairCreatedAt", 0), reverse=True)
+    
+    # Use current timestamp to filter only recently created pairs (last 7 days)
+    current_time = time.time() * 1000  # Convert to milliseconds
+    week_ago = current_time - (7 * 24 * 60 * 60 * 1000)
+    recent_pairs = [p for p in pairs if p.get("pairCreatedAt", 0) >= week_ago]
+    
+    # Use recent pairs if we have enough, otherwise fallback to sorted pairs
+    if len(recent_pairs) >= limit:
+        pairs = recent_pairs
+    
+    # Limit results
+    pairs = pairs[:limit]
+    
+    # Format response
+    result = []
+    for pair in pairs:
+        base_token = pair.get("baseToken", {})
+        quote_token = pair.get("quoteToken", {})
+        
+        # Calculate how many hours ago the pair was created
+        created_at = pair.get("pairCreatedAt", 0)
+        hours_ago = "N/A"
+        if created_at:
+            try:
+                # Convert milliseconds to hours
+                hours_ago = round((time.time() * 1000 - created_at) / (1000 * 60 * 60), 1)
+                hours_ago = f"{hours_ago} hours ago"
+            except (ValueError, TypeError):
+                hours_ago = "N/A"
+        
+        result.append({
+            "chain_id": pair.get("chainId", ""),
+            "dex_id": pair.get("dexId", ""),
+            "pair_address": pair.get("pairAddress", ""),
+            "base_token": {
+                "address": base_token.get("address", ""),
+                "name": base_token.get("name", ""),
+                "symbol": base_token.get("symbol", "")
+            },
+            "quote_token": {
+                "address": quote_token.get("address", ""),
+                "name": quote_token.get("name", ""),
+                "symbol": quote_token.get("symbol", "")
+            },
             "price_usd": pair.get("priceUsd", "0"),
             "liquidity_usd": pair.get("liquidity", {}).get("usd", 0),
             "volume_24h": pair.get("volume", {}).get("h24", 0),
-            "price_change_24h": pair.get("priceChange", {}).get("h24", 0)
+            "created_at": created_at,
+            "created_ago": hours_ago,
+            "url": pair.get("url", "")
         })
     
-    # For each chain, pick the pair with highest liquidity
-    result = []
-    for chain_id, data in chain_data.items():
-        pairs = data["pairs"]
-        if pairs:
-            # Sort by liquidity and pick highest
-            best_pair = max(pairs, key=lambda x: x["liquidity_usd"])
-            best_pair["chain_id"] = chain_id
-            result.append(best_pair)
-    
-    # Sort by liquidity across chains
-    result = sorted(result, key=lambda x: x["liquidity_usd"], reverse=True)
+    # Very short TTL for newest pairs cache
     _cache_set(cache_key, result)
-    
     return result
 
-@tool
-def search_dexes_for_token(args: str) -> List[Dict[str, Any]]:
-    """
-    Searches multiple DEXes for a specific token symbol or address.
+def get_top_gaining_pairs(chain_id: str = "", timeframe: str = "h24", limit: int = 10) -> List[Dict[str, Any]]:
+    """📊 Get pairs with the highest price gains in the selected timeframe.
     
     Args:
-        args (str): Format: "{token_symbol} {chain_id} {limit}"
-            - token_symbol: The symbol of the token to search for (e.g., "BONK")
-            - chain_id: The blockchain to search on (e.g., "solana")
-            - limit: Maximum number of results to return (e.g., "5")
-    
-    Returns:
-        List[Dict[str, Any]]: List of found tokens with their DEX, price, and liquidity information
-    """
-    expected_args = ["token_symbol", "chain_id", "limit"]
-    defaults = {"limit": 5}
-    
-    parsed_args = cast(Dict[str, Any], _parse_args(args, expected_args, defaults))
-    
-    if "token_symbol" not in parsed_args or not parsed_args["token_symbol"]:
-        return [{"error": "Please provide a token symbol"}]
-    
-    if "chain_id" not in parsed_args or not parsed_args["chain_id"]:
-        return [{"error": "Please provide a chain_id"}]
-    
-    token_symbol = str(parsed_args["token_symbol"]).upper()
-    chain_id = _normalize_chain_id(parsed_args["chain_id"])
-    limit = int(parsed_args["limit"])
-    
-    # Search for the token
-    url = f"https://api.dexscreener.com/latest/dex/search?q={token_symbol}&chain={chain_id}"
-    
-    try:
-        response_data = _make_request(url)
-        if not response_data or "pairs" not in response_data:
-            return [{"error": f"No data found for token {token_symbol} on {chain_id}"}]
-            
-        # Extract and normalize the data
-        pairs = response_data.get("pairs", [])
-        if not pairs:
-            return [{"error": f"No pairs found for {token_symbol} on {chain_id}"}]
-            
-        results = []
-        for pair in pairs[:limit]:  # Limit the results
-            base_token = pair.get("baseToken", {})
-            
-            # Only include if token symbol matches what we're looking for
-            if base_token.get("symbol", "").upper() == token_symbol:
-                results.append({
-                    "dex": pair.get("dexId", "unknown"),
-                    "token_address": base_token.get("address", ""),
-                    "token_name": base_token.get("name", ""),
-                    "pair_address": pair.get("pairAddress", ""),
-                    "price_usd": pair.get("priceUsd", "0"),
-                    "price_native": pair.get("priceNative", "0"),
-                    "liquidity_usd": pair.get("liquidity", {}).get("usd", 0),
-                    "volume_24h": pair.get("volume", {}).get("h24", 0),
-                    "chain": pair.get("chainId", "")
-                })
-            
-        return results[:limit]  # Ensure we don't exceed the limit
+        chain_id: Optional chain ID to filter pairs (e.g., "solana", "ethereum", "bsc")
+        timeframe: Time period for price change - "m5", "h1", "h6", or "h24" (default: "h24")
+        limit: Maximum number of pairs to return (default: 10, max: 100)
         
-    except Exception as e:
-        logger.error(f"Error searching for token {token_symbol}: {str(e)}")
-        return [{"error": f"Error searching for token: {str(e)}"}] 
+    Returns:
+        List of top gaining pairs with market data
+    """
+    # Validate limit
+    limit = max(1, min(100, limit))
+    
+    # Validate timeframe
+    valid_timeframes = ["m5", "h1", "h6", "h24"]
+    if timeframe not in valid_timeframes:
+        timeframe = "h24"
+    
+    # Normalize chain ID
+    if chain_id:
+        chain_id = _normalize_chain_id(chain_id)
+    
+    # Build cache key
+    cache_key = f"top_gaining_{chain_id}_{timeframe}_{limit}" if chain_id else f"top_gaining_{timeframe}_{limit}"
+    cached_data = _cache_get(cache_key)
+    if cached_data:
+        return cached_data
+    
+    # Use general search strategies to cast a wide net for trading pairs
+    # without hardcoding specific token names
+    search_strategies = [
+        # Quote currencies (most tokens pair with these)
+        "usdc", "usdt", "sol", "eth", "btc", "weth", 
+        # Generic asset categories and concepts
+        "token", "coin", "meme", "dao", "ai", "defi", "game", 
+        # Terms related to volatility/gains
+        "pump", "moon", "1000x", "gem", "farm"
+    ]
+    
+    all_pairs = []
+    for term in search_strategies:
+        url = f"{BASE_URL}/search"
+        params = {"q": term}
+        
+        data = _make_request(url, params=params)
+        
+        if "error" not in data:
+            pairs = _extract_pairs_data(data)
+            all_pairs.extend(pairs)
+    
+    if not all_pairs:
+        return [{"error": "No pairs found"}]
+    
+    # Remove duplicates based on pairAddress
+    unique_pairs = {}
+    for pair in all_pairs:
+        addr = pair.get("pairAddress", "")
+        if addr and addr not in unique_pairs:
+            unique_pairs[addr] = pair
+    
+    pairs = list(unique_pairs.values())
+    
+    # Filter by chain if specified
+    if chain_id:
+        pairs = [p for p in pairs if p.get("chainId", "").lower() == chain_id.lower()]
+        if not pairs:
+            return [{"error": f"No pairs found for chain: {chain_id}"}]
+    
+    # Filter out pairs without price change data for the requested timeframe
+    pairs = [p for p in pairs if timeframe in p.get("priceChange", {})]
+    
+    if not pairs:
+        return [{"error": f"No pairs with price change data for timeframe: {timeframe}"}]
+    
+    # Filter for minimum liquidity to avoid scams ($1000 minimum)
+    pairs = [p for p in pairs if p.get("liquidity", {}).get("usd", 0) >= 1000]
+    
+    # Sort by price change (highest first)
+    pairs.sort(key=lambda p: p.get("priceChange", {}).get(timeframe, 0), reverse=True)
+    
+    # Limit results
+    pairs = pairs[:limit]
+    
+    # Format response
+    result = []
+    for pair in pairs:
+        base_token = pair.get("baseToken", {})
+        quote_token = pair.get("quoteToken", {})
+        price_change = pair.get("priceChange", {}).get(timeframe, 0)
+        
+        result.append({
+            "chain_id": pair.get("chainId", ""),
+            "dex_id": pair.get("dexId", ""),
+            "pair_address": pair.get("pairAddress", ""),
+            "base_token": {
+                "address": base_token.get("address", ""),
+                "name": base_token.get("name", ""),
+                "symbol": base_token.get("symbol", "")
+            },
+            "quote_token": {
+                "address": quote_token.get("address", ""),
+                "name": quote_token.get("name", ""),
+                "symbol": quote_token.get("symbol", "")
+            },
+            "price_usd": pair.get("priceUsd", "0"),
+            "price_change": f"+{price_change}%" if price_change > 0 else f"{price_change}%",
+            "price_change_value": price_change,
+            "timeframe": timeframe,
+            "liquidity_usd": pair.get("liquidity", {}).get("usd", 0),
+            "volume_24h": pair.get("volume", {}).get("h24", 0),
+            "url": pair.get("url", "")
+        })
+    
+    _cache_set(cache_key, result)
+    return result
+
+# Create LangChain tool wrappers for the dexscreener functions
+@tool
+def get_trending_dex_pairs(query: str) -> str:
+    """📈 Get the most trending trading pairs on DEXes.
+    
+    Args:
+        query: Format as "chain_id limit" (e.g., "solana 5" or just "5" for all chains)
+        
+    Returns:
+        JSON string of trending pairs with market data
+    """
+    args = query.strip().split()
+    
+    if len(args) == 0:
+        chain_id = ""
+        limit = 10
+    elif len(args) == 1:
+        # Check if the argument is a number (limit) or a string (chain_id)
+        if args[0].isdigit():
+            chain_id = ""
+            limit = int(args[0])
+        else:
+            chain_id = args[0]
+            limit = 10
+    else:
+        chain_id = args[0]
+        try:
+            limit = int(args[1])
+        except ValueError:
+            limit = 10
+    
+    result = get_trending_pairs(chain_id, limit)
+    return json.dumps(result, indent=2)
+
+@tool
+def get_newest_dex_pairs(query: str) -> str:
+    """🆕 Get the most recently created pairs on DEXes.
+    
+    Args:
+        query: Format as "chain_id limit" (e.g., "solana 5" or just "5" for all chains)
+        
+    Returns:
+        JSON string of newest pairs with market data
+    """
+    args = query.strip().split()
+    
+    if len(args) == 0:
+        chain_id = ""
+        limit = 10
+    elif len(args) == 1:
+        # Check if the argument is a number (limit) or a string (chain_id)
+        if args[0].isdigit():
+            chain_id = ""
+            limit = int(args[0])
+        else:
+            chain_id = args[0]
+            limit = 10
+    else:
+        chain_id = args[0]
+        try:
+            limit = int(args[1])
+        except ValueError:
+            limit = 10
+    
+    result = get_newest_pairs(chain_id, limit)
+    return json.dumps(result, indent=2)
+
+@tool
+def get_top_gaining_dex_pairs(query: str) -> str:
+    """📊 Get pairs with the highest price gains in the selected timeframe.
+    
+    Args:
+        query: Format as "chain_id timeframe limit" (e.g., "solana h24 5")
+            chain_id: Optional chain ID (e.g., "solana", "ethereum", "bsc")
+            timeframe: Time period - "m5", "h1", "h6", or "h24" (default: "h24")
+            limit: Maximum number of pairs (default: 10)
+        
+    Returns:
+        JSON string of top gaining pairs with market data
+    """
+    args = query.strip().split()
+    
+    chain_id = ""
+    timeframe = "h24"
+    limit = 10
+    
+    if len(args) >= 1:
+        chain_id = args[0]
+    
+    if len(args) >= 2:
+        if args[1] in ["m5", "h1", "h6", "h24"]:
+            timeframe = args[1]
+        elif args[1].isdigit():
+            limit = int(args[1])
+    
+    if len(args) >= 3 and args[2].isdigit():
+        limit = int(args[2])
+    
+    result = get_top_gaining_pairs(chain_id, timeframe, limit)
+    return json.dumps(result, indent=2)

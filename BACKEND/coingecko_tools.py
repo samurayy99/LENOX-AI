@@ -2,8 +2,7 @@ import logging
 from typing import List, Dict, Union
 from langchain.tools import tool
 from pycoingecko import CoinGeckoAPI
-import pandas as pd
-import numpy as np
+
 
 
 # === Logging ===
@@ -26,79 +25,62 @@ def list_trending_coins() -> List[str]:
 
 
 @tool
-def get_current_price(coin_id: str, vs_currency: str = "usd") -> Dict[str, float]:
-    """💵 Current price of a coin."""
+def get_current_price(query: str, vs_currency: str = "usd") -> Dict[str, Union[float, str]]:
+    """
+    💵 Gibt den aktuellen Preis eines Coins zurück.
+    Akzeptiert entweder den CoinGecko-ID, Symbol oder Namen.
+    """
     try:
-        data = cg.get_price(ids=coin_id, vs_currencies=vs_currency)
-        return data.get(coin_id, {})
+        # Bereinige die Anfrage von Präfixen wie $ oder @
+        original_query = query
+        clean_query = query.strip()
+        if clean_query.startswith('$') or clean_query.startswith('@'):
+            clean_query = clean_query[1:]
+        
+        # Versuche verschiedene Suchstrategien
+        search_attempts = [
+            clean_query,                      # Basissuche mit bereinigtem Query
+            clean_query.lower(),              # Lowercase-Variante
+            f"{clean_query} coin",            # "coin" anhängen für bessere Ergebnisse
+            f"{clean_query} token"            # "token" anhängen für bessere Ergebnisse
+        ]
+        
+        # Führe alle Suchversuche durch, bis wir Ergebnisse haben
+        coins = []
+        for attempt in search_attempts:
+            if not attempt:  # Leere Strings überspringen
+                continue
+                
+            search_result = cg.search(attempt)
+            coins = search_result.get("coins", [])
+            if coins:
+                logger.info(f"Found results using search term: '{attempt}'")
+                break
+                
+        if not coins:
+            logger.warning(f"No matches found for any variation of query: {original_query}")
+            return {"error": f"Kein Coin gefunden für '{original_query}'."}
+
+        # Nimm den ersten Match als beste Vermutung
+        matched_id = coins[0]["id"]
+        matched_symbol = coins[0]["symbol"].upper()
+        matched_name = coins[0]["name"]
+        
+        # Preis abrufen
+        data = cg.get_price(ids=matched_id, vs_currencies=vs_currency)
+        
+        if not data or matched_id not in data:
+            logger.warning(f"No price data for {matched_id}")
+            return {"error": f"Kein Preis gefunden für {original_query} (ID: {matched_id})."}
+        
+        logger.info(f"Found price for {original_query} → {matched_name} ({matched_symbol})")
+        return data.get(matched_id, {"error": f"Kein Preis gefunden für ID {matched_id}."})
+
     except Exception as e:
-        logger.error(f"Price fetch failed for {coin_id}: {e}")
-        return {}
+        logger.error(f"Price fetch failed for {query}: {e}")
+        return {"error": str(e)}
 
 
-@tool
-def get_ohlc_data(coin_id: str, vs_currency: str = "usd", days: int = 1) -> List[List[float]]:
-    """📊 OHLC (Open, High, Low, Close) for coin (max 90 days)."""
-    try:
-        return cg.get_coin_ohlc_by_id(id=coin_id, vs_currency=vs_currency, days=days)
-    except Exception as e:
-        logger.error(f"OHLC fetch failed for {coin_id}: {e}")
-        return []
-
-
-@tool
-def get_market_chart(coin_id: str, vs_currency: str = "usd", days: int = 30) -> List[float]:
-    """📉 Returns historical closing prices."""
-    try:
-        data = cg.get_coin_market_chart_by_id(id=coin_id, vs_currency=vs_currency, days=days)
-        return [price[1] for price in data.get("prices", [])]
-    except Exception as e:
-        logger.error(f"Market chart fetch failed for {coin_id}: {e}")
-        return []
-
-
-@tool
-def calculate_macd(prices: List[float], slow: int = 26, fast: int = 12, signal: int = 9) -> Dict[str, Union[float, str]]:
-    """📈 MACD Indicator calculation."""
-    try:
-        s = pd.Series(prices)
-        macd = s.ewm(span=fast).mean() - s.ewm(span=slow).mean()
-        signal_line = macd.ewm(span=signal).mean()
-        return {
-            "macd": round(macd.iloc[-1], 4),
-            "signal": round(signal_line.iloc[-1], 4),
-            "trend": "bullish" if macd.iloc[-1] > signal_line.iloc[-1] else "bearish"
-        }
-    except Exception as e:
-        logger.error(f"MACD calc failed: {e}")
-        return {}
-
-
-@tool
-def calculate_rsi(prices: List[float], period: int = 14) -> float:
-    """📊 Calculates the RSI (Relative Strength Index)."""
-    try:
-        deltas = np.diff(prices)
-        seed = deltas[:period+1]
-        up = seed[seed >= 0].sum()/period
-        down = -seed[seed < 0].sum()/period
-        rs = up / down if down != 0 else 0
-        rsi = np.zeros_like(prices)
-        rsi[:period] = 100. - 100. / (1. + rs)
-
-        for i in range(period, len(prices)):
-            delta = deltas[i - 1]
-            upval = max(delta, 0)
-            downval = max(-delta, 0)
-            up = (up * (period - 1) + upval) / period
-            down = (down * (period - 1) + downval) / period
-            rs = up / down if down != 0 else 0
-            rsi[i] = 100. - 100. / (1. + rs)
-
-        return round(float(rsi[-1]), 2)
-    except Exception as e:
-        logger.error(f"RSI calc failed: {e}")
-        return 0.0
 
 
 @tool

@@ -11,4 +11,5 @@ tmp/
 lenox.db
 requirements.txt
 .env
+twitter_cookies.json
 

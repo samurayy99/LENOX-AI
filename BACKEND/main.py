@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from lenox import Lenox  
 from prompts import PromptEngine, PromptEngineConfig
 from tool_imports import import_tools
-from perplexity_research import PerplexityManager
+from gpt_research_tools import GPTResearchManager
 import os
 import traceback
 import sys
@@ -45,8 +45,8 @@ tools_dict = {tool.name: tool for tool in tools}
 prompt_engine_config = PromptEngineConfig(context_length=10, max_tokens=4096)
 prompt_engine = PromptEngine(config=prompt_engine_config, tools=tools_dict)  # Pass tools_dict here
 
-# Initialize PerplexityManager instead of GPTResearchManager
-gpt_research_manager = PerplexityManager()
+# Initialize GPTResearchManager
+gpt_research_manager = GPTResearchManager()
 
 
 # Initialize Lenox with all necessary components

@@ -118,28 +118,55 @@ class gmgn:
         except Exception:
             return {}
     
-    def getNewPairs(self, limit: int = 50) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    def getNewPairs(self, limit: int = 20) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Limit - Limits how many tokens are in the response.
+        Get newly created token pairs on DEXes.
 
         Args:
-            limit: Maximum number of pairs to return
+            limit: Maximum number of pairs to return (recommended: ≤20 for stability)
 
         Returns:
             List or dictionary with new pairs data
         """
         self.randomiseRequest()
-        if limit > 50:
-            return {"error": "You cannot have more than check more than 50 pairs."}
         
+        # Sicherheitsüberprüfung: Limit begrenzen, da große Anfragen fehlschlagen können
+        if limit > 20:
+            print(f"Warning: Requested limit {limit} for getNewPairs may cause API errors. Using 20 instead.")
+            limit = 20  # Limit auf 20 begrenzen für API-Stabilität
+        
+        # Versuche zunächst den Standard-Endpunkt
         url = f"{self.BASE_URL}/v1/pairs/sol/new_pairs?limit={limit}&orderby=open_timestamp&direction=desc&filters[]=not_honeypot"
 
         try:
             request = self.sendRequest.get(url, headers=self.headers)
             jsonResponse = request.json()
             
-            return self._process_response(jsonResponse)
-        except Exception:
+            result = self._process_response(jsonResponse)
+            
+            # Wenn wir hier leere Ergebnisse bekommen, versuchen wir es mit einem alternativen Endpunkt
+            if not result:
+                # Alternativer Endpunkt ohne Filter
+                alt_url = f"{self.BASE_URL}/v1/pairs/sol/new_pairs?limit={limit}&orderby=open_timestamp&direction=desc"
+                request = self.sendRequest.get(alt_url, headers=self.headers)
+                jsonResponse = request.json()
+                result = self._process_response(jsonResponse)
+                
+                # Wenn immer noch leer, versuchen wir eine dritte Option
+                if not result:
+                    # Versuche einen anderen Endpunkt für neue Paare (manchmal rotieren die Endpunkte)
+                    alt2_url = f"{self.BASE_URL}/v1/swaps/sol/new_pairs?limit={limit}"
+                    request = self.sendRequest.get(alt2_url, headers=self.headers)
+                    jsonResponse = request.json()
+                    result = self._process_response(jsonResponse)
+            
+            # Protokollierung für Debugging-Zwecke
+            if not result:
+                print("Warning: getNewPairs returned empty results from all endpoints")
+                
+            return result
+        except Exception as e:
+            print(f"Error in getNewPairs: {str(e)}")
             return {}
     
     def getTrendingWallets(self, timeframe: str = "7d", walletTag: str = "smart_degen") -> Union[Dict[str, Any], List[Dict[str, Any]]]:
@@ -148,14 +175,34 @@ class gmgn:
 
         Args:
             timeframe: "1d", "7d" or "30d"
-            walletTag: "pump_smart", "smart_degen", "reowned" or "snipe_bot"
+            walletTag: Wallet tag/filter category - one of:
+                "smart_degen" or "Smart Money" (in UI)
+                "pump_smart" or "Pump SM" (in UI)
+                "reowned" (Reowned)
+                "snipe_bot" (Sniper)
+                "kol" (KOL)
+                Note: Use the API tag names (left) not the UI names (right).
 
         Returns:
             List or dictionary with wallet data
         """
         self.randomiseRequest()
         
-        url = f"{self.BASE_URL}/v1/rank/sol/wallets/{timeframe}?tag={walletTag}&orderby=pnl_{timeframe}&direction=desc"
+        # Map UI-friendly names to API parameter names (falls needed)
+        tag_map = {
+            "Smart Money": "smart_degen",
+            "Pump SM": "pump_smart",
+            "smart_degen": "smart_degen",
+            "pump_smart": "pump_smart",
+            "reowned": "reowned",
+            "snipe_bot": "snipe_bot",
+            "kol": "kol"
+        }
+        
+        # Convert UI name to API parameter if needed
+        api_tag = tag_map.get(walletTag, walletTag)
+        
+        url = f"{self.BASE_URL}/v1/rank/sol/wallets/{timeframe}?tag={api_tag}&orderby=pnl_{timeframe}&direction=desc"
 
         try:
             request = self.sendRequest.get(url, headers=self.headers)
@@ -240,6 +287,43 @@ class gmgn:
             
             return self._process_response(jsonResponse)
         except Exception:
+            return {}
+
+    def getRecentlyCreatedPairs(self, limit: int = 10) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Alternative method to get recently created token pairs, using a different endpoint.
+        This might work when getNewPairs fails due to API changes.
+
+        Args:
+            limit: Maximum number of pairs to return (recommended: ≤10)
+            
+        Returns:
+            List or dictionary with recently created pairs
+        """
+        self.randomiseRequest()
+        if limit > 20:
+            print(f"Warning: Requested limit {limit} may cause API errors. Using 20 instead.")
+            limit = 20
+        
+        # Dies ist ein alternativer Endpunkt, der manchmal stabiler funktioniert
+        url = f"{self.BASE_URL}/v1/rank/sol/new_pools?limit={limit}&direction=desc&age=1"
+
+        try:
+            request = self.sendRequest.get(url, headers=self.headers)
+            jsonResponse = request.json()
+            
+            result = self._process_response(jsonResponse)
+            
+            # Wenn der erste Versuch fehlschlägt, versuchen wir es mit einem anderen Parameter
+            if not result:
+                alt_url = f"{self.BASE_URL}/v1/rank/sol/new_pools?limit={limit}&direction=desc"
+                request = self.sendRequest.get(alt_url, headers=self.headers)
+                jsonResponse = request.json()
+                result = self._process_response(jsonResponse)
+            
+            return result
+        except Exception as e:
+            print(f"Error in getRecentlyCreatedPairs: {str(e)}")
             return {}
 
     def getGasFee(self) -> Dict[str, Any]:
@@ -409,3 +493,104 @@ class gmgn:
             return result
         except Exception:
             return {}
+
+    def getTopHolders(self, contractAddress: str) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Get top token holders.
+        
+        Args:
+            contractAddress: The Solana token address
+            
+        Returns:
+            List or dictionary with top holders data
+        """
+        self.randomiseRequest()
+        if not contractAddress:
+            return {"error": "You must input a contract address."}
+        
+        url = f"{self.BASE_URL}/v1/tokens/holders/sol/{contractAddress}"
+
+        try:
+            request = self.sendRequest.get(url, headers=self.headers)
+            jsonResponse = request.json()
+            
+            return self._process_response(jsonResponse)
+        except Exception:
+            return []
+    
+    def getWalletTrades(self, walletAddress: str) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Get trades for a specific wallet.
+        
+        Args:
+            walletAddress: The Solana wallet address
+            
+        Returns:
+            List or dictionary with wallet trades
+        """
+        self.randomiseRequest()
+        if not walletAddress:
+            return {"error": "You must input a wallet address."}
+        
+        url = f"{self.BASE_URL}/v1/wallets/trades/sol/{walletAddress}"
+
+        try:
+            request = self.sendRequest.get(url, headers=self.headers)
+            jsonResponse = request.json()
+            
+            return self._process_response(jsonResponse)
+        except Exception:
+            return []
+    
+    def getWalletProfile(self, walletAddress: str) -> Dict[str, Any]:
+        """
+        Get wallet profile information.
+        
+        Args:
+            walletAddress: The Solana wallet address
+            
+        Returns:
+            Dictionary with wallet profile data
+        """
+        self.randomiseRequest()
+        if not walletAddress:
+            return {"error": "You must input a wallet address."}
+        
+        # First try to get detailed wallet info
+        wallet_info = self.getWalletInfo(walletAddress, "7d")
+        
+        # If that fails, return an empty result
+        if not wallet_info:
+            return {}
+            
+        # Extract relevant profile data
+        profile_data = {
+            "address": walletAddress,
+            "win_rate": _safe_get(wallet_info, "win_rate", 0),
+            "realized_profit": _safe_get(wallet_info, "realized_profit", 0),
+            "trade_count": _safe_get(wallet_info, "trade_count", 0),
+            "tags": _safe_get(wallet_info, "tags", [])
+        }
+        
+        return profile_data
+
+# Helper function for safe dictionary access
+def _safe_get(obj: Any, key: str, default: Any = None) -> Any:
+    """Safely get a value from an object, checking if it's a dictionary first."""
+    if obj is None:
+        return default
+        
+    # Handle list of keys for nested access
+    if isinstance(key, list):
+        current = obj
+        for k in key:
+            if isinstance(current, dict) and k in current:
+                current = current[k]
+            else:
+                return default
+        return current
+        
+    # Handle single key
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return default
